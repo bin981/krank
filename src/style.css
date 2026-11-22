@@ -257,16 +257,28 @@ body.shorts #frame {
   box-shadow: 0 0 0 100vmax #000;
 }
 
+#boot-error[hidden] {
+  display: none !important;
+}
 #boot-error {
   position: fixed;
   inset: 0;
-  z-index: 9;
+  z-index: 20;
   display: grid;
   place-items: center;
   padding: 24px;
-  background: #10120e;
+  background: rgba(16, 18, 14, 0.94);
   text-align: center;
 }
+.boot-card {
+  width: min(440px, 100%);
+  padding: 22px 22px 18px;
+  background: #161910;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.boot-card h2 { margin-bottom: 8px; }
+.boot-card p { margin: 0 0 16px; color: var(--muted); line-height: 1.5; }
 .mobile-only { display: none; }
 
 @media (max-width: 1100px) {

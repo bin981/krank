@@ -11,19 +11,46 @@ import { EngineAssembly } from "./scene/engine";
 import { Studio } from "./scene/studio";
 import { Hud } from "./ui";
 
+const WEBGL_MESSAGE =
+  "Bu tarayıcı WebGL ile üç boyutlu görüntü üretemiyor. Donanım hızlandırmasını açıp sayfayı yenileyin, veya güncel bir Chrome, Firefox ya da Safari deneyin. Mobilde düşük güç modu ve eski ekran kartı sürücüleri de sahneyi boş bırakabilir.";
+const LOST_MESSAGE =
+  "Grafik bağlamı koptu ve sahne durdu. Sayfayı yenileyin. Düşük güç modu, başka bir sekme veya ekran kartı sürücüsü bağlamı kapatmış olabilir.";
+const DRAW_MESSAGE =
+  "Sahne çizilirken bir grafik hatası oluştu. Sayfayı yenileyin. Sorun sürerse donanım hızlandırmasını açın veya başka bir tarayıcı deneyin.";
+
 const issues = verifyLayouts();
 if (issues.length) console.error(issues);
 
-const canvas = document.querySelector("#c") as HTMLCanvasElement;
-const frame = document.querySelector("#frame") as HTMLElement;
+const boot = document.querySelector("#boot-error");
+const bootText = document.querySelector("#boot-error-text");
+document.querySelector("#boot-reload")?.addEventListener("click", () => location.reload());
+
+function showBootError(message: string): void {
+  if (bootText) bootText.textContent = message;
+  if (boot instanceof HTMLElement) boot.hidden = false;
+}
+
+const canvas = document.querySelector("#c");
+const frame = document.querySelector("#frame");
+if (!(canvas instanceof HTMLCanvasElement) || !(frame instanceof HTMLElement)) {
+  showBootError(WEBGL_MESSAGE);
+  throw new Error("Simülatör tuvali bulunamadı.");
+}
+
+let alive = true;
+canvas.addEventListener("webglcontextlost", (event) => {
+  event.preventDefault();
+  alive = false;
+  showBootError(LOST_MESSAGE);
+});
 
 let studio: Studio;
 try {
+  if (!webglAvailable()) throw new Error("WebGL yok");
   studio = new Studio(canvas, frame);
 } catch (err) {
-  const box = document.querySelector("#boot-error") as HTMLElement;
-  box.hidden = false;
-  box.textContent = "WebGL başlatılamadı. Güncel bir masaüstü tarayıcı gerekli.";
+  console.error(err);
+  showBootError(WEBGL_MESSAGE);
   throw err;
 }
 
@@ -74,19 +101,40 @@ document.fonts.ready.then(() => studio.setEngine(new EngineAssembly(sim.spec))).
 
 let last = performance.now();
 function loop(now: number): void {
+  if (!alive) return;
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  const view = hud.view();
-  if (view && hud.shortsOn !== studio.shorts) studio.setShorts(hud.shortsOn);
-  sim.throttle = hud.throttle;
-  if (!sim.seized && !sim.heatSeize && sim.rodStage < 2) sim.targetRpm = hud.rpm;
-  sim.oilLevel = hud.oilLevel;
-  sim.radiatorBlocked = hud.radiatorBlocked;
-  sim.spec.boostTarget = hud.spec.boostTarget;
-  sim.update(dt);
-  studio.update(sim, view, dt);
-  audio.update(sim);
-  hud.sync(sim, studio.hover);
+  try {
+    const view = hud.view();
+    if (view && hud.shortsOn !== studio.shorts) studio.setShorts(hud.shortsOn);
+    sim.throttle = hud.throttle;
+    if (!sim.seized && !sim.heatSeize && sim.rodStage < 2) sim.targetRpm = hud.rpm;
+    sim.oilLevel = hud.oilLevel;
+    sim.radiatorBlocked = hud.radiatorBlocked;
+    sim.spec.boostTarget = hud.spec.boostTarget;
+    sim.update(dt);
+    studio.update(sim, view, dt);
+    audio.update(sim);
+    hud.sync(sim, studio.hover);
+  } catch (err) {
+    alive = false;
+    console.error(err);
+    showBootError(DRAW_MESSAGE);
+    return;
+  }
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
+
+function webglAvailable(): boolean {
+  try {
+    const probe = document.createElement("canvas");
+    const gl = probe.getContext("webgl2", { failIfMajorPerformanceCaveat: false })
+      ?? probe.getContext("webgl", { failIfMajorPerformanceCaveat: false });
+    if (!gl) return false;
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return true;
+  } catch {
+    return false;
+  }
+}

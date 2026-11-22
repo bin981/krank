@@ -32,40 +32,42 @@ export class Studio {
 
   constructor(canvas: HTMLCanvasElement, frame: HTMLElement) {
     this.frameEl = frame;
-    this.renderer = new THREE.WebGLRenderer({
-      canvas,
-      antialias: true,
-      alpha: false,
-      powerPreference: "high-performance",
-    });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+    const graphics = createRenderer(canvas);
+    this.renderer = graphics.renderer;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, graphics.lite ? 1.25 : 1.75));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.12;
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.shadowMap.enabled = !graphics.lite;
+    if (!graphics.lite) this.renderer.shadowMap.type = THREE.PCFShadowMap;
 
     this.camera = new THREE.PerspectiveCamera(34, 1, 0.05, 80);
     this.scene.background = new THREE.Color(0x10120e);
     this.scene.fog = new THREE.Fog(0x10120e, 14, 32);
 
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    const env = new RoomEnvironment();
-    this.scene.environment = pmrem.fromScene(env, 0.04).texture;
-    env.dispose();
-    pmrem.dispose();
+    try {
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      const env = new RoomEnvironment();
+      this.scene.environment = pmrem.fromScene(env, 0.04).texture;
+      env.dispose();
+      pmrem.dispose();
+    } catch (err) {
+      console.warn("Ortam haritası atlandı.", err);
+    }
 
     const key = new THREE.DirectionalLight(0xfff1dc, 2.8);
     key.position.set(5.5, 8.5, 4.2);
-    key.castShadow = true;
-    key.shadow.mapSize.set(2048, 2048);
-    key.shadow.camera.near = 0.5;
-    key.shadow.camera.far = 28;
-    key.shadow.camera.left = -7;
-    key.shadow.camera.right = 7;
-    key.shadow.camera.top = 7;
-    key.shadow.camera.bottom = -7;
-    key.shadow.bias = -0.00035;
+    if (!graphics.lite) {
+      key.castShadow = true;
+      key.shadow.mapSize.set(2048, 2048);
+      key.shadow.camera.near = 0.5;
+      key.shadow.camera.far = 28;
+      key.shadow.camera.left = -7;
+      key.shadow.camera.right = 7;
+      key.shadow.camera.top = 7;
+      key.shadow.camera.bottom = -7;
+      key.shadow.bias = -0.00035;
+    }
     this.scene.add(key);
     this.scene.add(new THREE.AmbientLight(0xd7d2c4, 0.18));
     this.scene.add(new THREE.HemisphereLight(0xc9d4e4, 0x2a261c, 0.55));
@@ -223,6 +225,40 @@ export class Studio {
     }
     this.hover = "";
   }
+}
+
+function liteGraphics(): boolean {
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  const cores = navigator.hardwareConcurrency ?? 8;
+  const lowMemory = typeof nav.deviceMemory === "number" && nav.deviceMemory <= 4;
+  return (lowMemory && (coarse || cores <= 4)) || (coarse && cores <= 4);
+}
+
+function createRenderer(canvas: HTMLCanvasElement): { renderer: THREE.WebGLRenderer; lite: boolean } {
+  const lite = liteGraphics();
+  const attempts: Array<{ antialias: boolean; powerPreference: "high-performance" | "low-power" }> = lite
+    ? [{ antialias: false, powerPreference: "low-power" }]
+    : [
+        { antialias: true, powerPreference: "high-performance" },
+        { antialias: false, powerPreference: "low-power" },
+      ];
+  let last: unknown;
+  for (const attempt of attempts) {
+    try {
+      const renderer = new THREE.WebGLRenderer({
+        canvas,
+        alpha: false,
+        antialias: attempt.antialias,
+        powerPreference: attempt.powerPreference,
+        failIfMajorPerformanceCaveat: false,
+      });
+      return { renderer, lite: lite || !attempt.antialias };
+    } catch (err) {
+      last = err;
+    }
+  }
+  throw last instanceof Error ? last : new Error("WebGL başlatılamadı");
 }
 
 function radialTexture(): THREE.CanvasTexture {

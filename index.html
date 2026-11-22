@@ -173,7 +173,14 @@
         </div>
       </footer>
     </div>
-    <div id="boot-error" hidden></div>
+    <div id="boot-error" hidden role="alert">
+      <div class="boot-card">
+        <p class="kicker">WebGL</p>
+        <h2>Simülatör açılamadı</h2>
+        <p id="boot-error-text"></p>
+        <button type="button" id="boot-reload" class="accent">Sayfayı yenile</button>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
