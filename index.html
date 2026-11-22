@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KRANK — Dört zamanlı motor simülatörü</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="topbar">
+        <div class="brand">
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <rect x="10" y="4" width="12" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" />
+            <path d="M12 9h8M12 12h8M16 20v7M12 27h8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+          <div>
+            <strong>KRANK</strong>
+            <span>Dört zamanlı motor atölyesi</span>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button type="button" id="drawer-left" class="ghost mobile-only">Motor</button>
+          <button type="button" id="drawer-right" class="ghost mobile-only">Veriler</button>
+          <button type="button" id="sound" class="ghost" aria-pressed="false">Sesi aç</button>
+          <button type="button" id="shorts" class="accent" aria-pressed="false">Shorts 9:16</button>
+        </div>
+      </header>
+
+      <div id="viewport">
+        <div id="frame">
+          <canvas id="c"></canvas>
+          <div id="broadcast" hidden>
+            <div class="bc-top">
+              <span class="mark">KRANK</span>
+              <span class="live">CANLI</span>
+            </div>
+            <div class="bc-lower">
+              <p id="bc-title">2,0 Sıra 4 Turbo Benzin</p>
+              <p id="bc-sub">Ateşleme 1 – 3 – 4 – 2</p>
+              <div class="bc-rpm"><b id="bc-rpm">2.400</b><small>dev/dk</small></div>
+              <div class="bc-stats">
+                <span id="bc-torque">0 Nm</span>
+                <span id="bc-power">0 bg</span>
+                <span id="bc-boost"></span>
+              </div>
+              <div id="bc-pips" class="pips"></div>
+              <p id="bc-msg" class="bc-msg"></p>
+            </div>
+            <button type="button" id="exit-shorts" class="exit-shorts">Kadrajdan çık</button>
+          </div>
+          <p id="hover" class="hover-name"></p>
+          <p id="banner" class="banner ok" hidden></p>
+        </div>
+      </div>
+
+      <aside id="left" class="panel">
+        <p class="kicker">Yapılandırma</p>
+        <h2>Motoru kur</h2>
+        <div id="presets" class="chips"></div>
+
+        <fieldset>
+          <legend>Yakıt</legend>
+          <div class="seg" id="fuel">
+            <button type="button" data-value="benzin" class="on">Benzin</button>
+            <button type="button" data-value="dizel">Dizel</button>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Besleme</legend>
+          <div class="seg" id="aspiration">
+            <button type="button" data-value="atmosferik">Atmosferik</button>
+            <button type="button" data-value="turbo" class="on">Turbo</button>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Düzen</legend>
+          <div class="seg wrap" id="layout">
+            <button type="button" data-value="i3">Sıra 3</button>
+            <button type="button" data-value="i4" class="on">Sıra 4</button>
+            <button type="button" data-value="i6">Sıra 6</button>
+            <button type="button" data-value="v6">V6</button>
+            <button type="button" data-value="v8">V8</button>
+          </div>
+        </fieldset>
+
+        <label class="slider">Çap <b id="bore-val">82,5 mm</b>
+          <input id="bore" type="range" min="68" max="112" step="0.5" value="82.5" />
+        </label>
+        <label class="slider">Strok <b id="stroke-val">92,8 mm</b>
+          <input id="stroke" type="range" min="64" max="112" step="0.5" value="92.8" />
+        </label>
+        <label class="slider">Sıkıştırma <b id="cr-val">9,6 : 1</b>
+          <input id="cr" type="range" min="8" max="22" step="0.1" value="9.6" />
+        </label>
+        <label class="slider" id="boost-wrap">Turbo hedefi <b id="boost-val">1,25 bar</b>
+          <input id="boost" type="range" min="0.3" max="2.4" step="0.05" value="1.25" />
+        </label>
+        <p id="disp" class="disp">1.984 cc</p>
+
+        <p class="kicker">Zorlanma</p>
+        <label class="slider">Yağ seviyesi <b id="oil-val">%100</b>
+          <input id="oil" type="range" min="0" max="100" step="1" value="100" />
+        </label>
+        <label class="check"><input id="radiator" type="checkbox" /> Radyatör tıkalı</label>
+        <p class="hint">Yüksek devir, aşırı basınç, hararet veya düşük yağ ilgili arızayı kendiliğinden başlatır.</p>
+      </aside>
+
+      <aside id="right" class="panel">
+        <p class="kicker">Telemetri</p>
+        <div class="tach">
+          <b id="rpm-read">2.400</b>
+          <span>dev/dk</span>
+        </div>
+        <div class="stats">
+          <div><em>Tork</em><strong id="torque">0 Nm</strong></div>
+          <div><em>Güç</em><strong id="power">0 bg</strong></div>
+          <div><em>Hacim</em><strong id="cc">1.984 cc</strong></div>
+          <div><em>Boost</em><strong id="boost-read">0 bar</strong></div>
+          <div><em>Yağ</em><strong id="oil-read">3,0 bar</strong></div>
+          <div><em>Hararet</em><strong id="temp">90 °C</strong></div>
+        </div>
+        <p class="kicker">Silindir basıncı <span id="graph-cyl">Silindir 1</span></p>
+        <canvas id="graph" width="520" height="180"></canvas>
+        <p id="peak" class="hint">Tepe basınç grafikte.</p>
+        <div id="cyls" class="cyls"></div>
+        <p class="order">Ateşleme sırası <b id="order">1 – 3 – 4 – 2</b></p>
+
+        <p class="kicker">Zorlanma çubukları</p>
+        <div class="abuse">
+          <span>Aşırı devir</span><i><b id="ab-rev"></b></i>
+          <span>Hararet</span><i><b id="ab-heat"></b></i>
+          <span>Yağ filmi</span><i><b id="ab-oil"></b></i>
+          <span>Aşırı basınç</span><i><b id="ab-boost"></b></i>
+        </div>
+
+        <p class="kicker">Arıza</p>
+        <div class="fails">
+          <button type="button" data-fail="rod">Biyel kırılması</button>
+          <button type="button" data-fail="gasket">Conta yakma</button>
+          <button type="button" data-fail="turbo" id="fail-turbo">Turbo arızası</button>
+          <button type="button" data-fail="timing">Triger kopması</button>
+          <button type="button" data-fail="seizure">Hararet kilidi</button>
+          <button type="button" id="reset" class="danger">Sıfırla</button>
+        </div>
+        <p id="status" class="status ok">Motor düzgün çalışıyor</p>
+      </aside>
+
+      <footer id="bottom">
+        <button type="button" id="run" class="run on" aria-pressed="true">Çalışıyor</button>
+        <label class="grow">Devir
+          <input id="rpm" type="range" min="0" max="7500" step="10" value="2400" />
+          <small id="redline">Kırmızı bölge 6.500</small>
+        </label>
+        <label class="grow">Gaz
+          <input id="throttle" type="range" min="0" max="100" step="1" value="45" />
+        </label>
+        <div class="seg" id="viewmode">
+          <button type="button" data-value="solid" class="on">Kapalı</button>
+          <button type="button" data-value="cutaway">Kesit</button>
+          <button type="button" data-value="xray">Röntgen</button>
+        </div>
+        <label class="explode">Patlat
+          <input id="explode" type="range" min="0" max="100" value="0" />
+        </label>
+        <button type="button" id="labels" class="ghost on" aria-pressed="true">Etiketler</button>
+        <button type="button" id="spin" class="ghost" aria-pressed="false">Döndür</button>
+        <div class="seg cams">
+          <button type="button" data-cam="threequarter">¾</button>
+          <button type="button" data-cam="side">Yan</button>
+          <button type="button" data-cam="front">Ön</button>
+          <button type="button" data-cam="top">Üst</button>
+        </div>
+      </footer>
+    </div>
+    <div id="boot-error" hidden></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
