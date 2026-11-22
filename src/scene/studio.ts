@@ -6,7 +6,7 @@ import type { Simulation } from "../engine/sim";
 import type { ViewState } from "../view";
 import { EngineAssembly } from "./engine";
 
-export type CameraPreset = "threequarter" | "side" | "top" | "front" | "shorts";
+export type CameraPreset = "threequarter" | "side" | "top" | "front" | "shorts" | "cine";
 
 export class Studio {
   readonly scene = new THREE.Scene();
@@ -128,6 +128,7 @@ export class Studio {
     });
 
     canvas.addEventListener("pointermove", (ev) => this.pick(ev));
+    canvas.addEventListener("pointerdown", (ev) => this.pick(ev));
     canvas.addEventListener("pointerleave", () => {
       this.hover = "";
     });
@@ -158,7 +159,8 @@ export class Studio {
     this.shorts = on;
     this.camera.fov = on ? 30 : 34;
     this.camera.updateProjectionMatrix();
-    this.frameTo(on ? "shorts" : "threequarter", false);
+    if (!on && this.preset === "cine") this.preset = "threequarter";
+    if (this.preset !== "cine") this.frameTo(on ? "shorts" : "threequarter", false);
     this.resize();
   }
 
@@ -171,6 +173,7 @@ export class Studio {
     else if (preset === "top") pos.set(0.15, t.y + d * 1.15, 0.15);
     else if (preset === "front") pos.set(t.x * 0.2, t.y + d * 0.05, d * 1.05);
     else if (preset === "shorts") pos.set(t.x + d * 0.38, t.y + d * 0.02, d * 0.58);
+    else if (preset === "cine") pos.set(t.x + d * 0.15, t.y + d * 0.16, d * 0.95);
     else pos.set(t.x + d * 0.78, t.y + d * 0.34, t.z + d * 0.86);
     if (instant) {
       this.camera.position.copy(pos);
@@ -192,15 +195,29 @@ export class Studio {
   }
 
   update(sim: Simulation, view: ViewState, dt: number): void {
-    this.controls.autoRotate = view.spin && !this.desired;
-    this.controls.autoRotateSpeed = 0.8;
-    if (this.desired) {
-      this.camera.position.lerp(this.desired.pos, 0.1);
-      this.controls.target.lerp(this.desired.target, 0.1);
-      if (this.camera.position.distanceTo(this.desired.pos) < 0.04) this.desired = null;
+    if (this.preset === "cine" && !this.interacting) {
+      const ang = sim.time * 0.32;
+      const d = this.dist * 0.96;
+      const t = this.center;
+      this.camera.position.set(
+        t.x + Math.sin(ang) * d * 0.78,
+        t.y + d * 0.2 + Math.sin(ang * 0.5) * d * 0.05,
+        t.z + Math.cos(ang) * d * 0.78,
+      );
+      this.controls.target.copy(t);
+      this.camera.lookAt(t);
+    } else {
+      this.controls.autoRotate = view.spin && !this.desired;
+      this.controls.autoRotateSpeed = 0.8;
+      if (this.desired) {
+        this.camera.position.lerp(this.desired.pos, 0.1);
+        this.controls.target.lerp(this.desired.target, 0.1);
+        if (this.camera.position.distanceTo(this.desired.pos) < 0.04) this.desired = null;
+      }
+      if (this.interacting || view.spin || this.desired) this.controls.update();
+      else this.camera.lookAt(this.controls.target);
     }
-    if (this.interacting || view.spin || this.desired) this.controls.update();
-    else this.camera.lookAt(this.controls.target);
+    if (this.engine) this.engine.hoverName = this.hover;
     this.engine?.update(sim, view, dt, this.fireLight);
     this.renderer.render(this.scene, this.camera);
     this.css.render(this.scene, this.camera);

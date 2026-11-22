@@ -28,6 +28,8 @@ export class Hud {
   private shorts = false;
   private running = true;
   private savedRpm = 2400;
+  private tour = false;
+  private slow = false;
 
   constructor(
     private readonly onSpec: (spec: EngineSpec) => void,
@@ -72,6 +74,11 @@ export class Hud {
     return (document.querySelector("#radiator") as HTMLInputElement).checked;
   }
 
+  get timeScale(): number {
+    if (this.tour) return 0.22;
+    return this.slow ? 0.3 : 1;
+  }
+
   sync(sim: Simulation, hover: string): void {
     const rpm = sim.indicatedRpm;
     const red = redlineRpm(sim.spec);
@@ -108,7 +115,28 @@ export class Hud {
     status.className = `status ${sim.messageLevel}`;
 
     const hoverEl = document.querySelector("#hover");
-    if (hoverEl) hoverEl.textContent = hover;
+    const blurb = PARTS[hover];
+    if (hoverEl) hoverEl.textContent = blurb ? "" : hover;
+    const card = document.querySelector("#part-card") as HTMLElement | null;
+    if (card) {
+      card.hidden = !blurb;
+      if (blurb) {
+        text("#part-name", hover);
+        text("#part-blurb", blurb);
+      }
+    }
+    if (this.tour && sim.cyls[0]) {
+      const phase = phaseDeg(sim.crankDeg, sim.cyls[0].fireDeg);
+      const stroke = strokeOf(phase, sim.spec.fuel);
+      text("#tour-title", stroke.label);
+      text("#tour-text", STROKES[stroke.id]);
+    }
+    const arc = document.querySelector("#gauge-arc") as SVGPathElement | null;
+    if (arc) {
+      const ratio = Math.max(0, Math.min(1, rpm / (red * 1.05)));
+      arc.style.strokeDashoffset = String(100 - ratio * 100);
+      arc.style.stroke = rpm > red ? "#ff4d1c" : rpm > red * 0.92 ? "#ffb020" : "#e2ff4d";
+    }
 
     bar("#ab-rev", sim.abuse.rev);
     bar("#ab-heat", sim.abuse.heat);
@@ -197,6 +225,36 @@ export class Hud {
     document.querySelector("#run")?.addEventListener("click", () => this.toggleRun());
     document.querySelector("#shorts")?.addEventListener("click", () => this.setShorts(!this.shorts));
     document.querySelector("#exit-shorts")?.addEventListener("click", () => this.setShorts(false));
+    document.querySelector("#tour")?.addEventListener("click", (ev) => {
+      this.tour = !this.tour;
+      press(ev.currentTarget as HTMLButtonElement, this.tour);
+      const card = document.querySelector("#tour-card") as HTMLElement;
+      card.hidden = !this.tour;
+      if (this.tour) this.onCamera("side");
+    });
+    document.querySelector("#slow")?.addEventListener("click", (ev) => {
+      this.slow = !this.slow;
+      press(ev.currentTarget as HTMLButtonElement, this.slow);
+    });
+    document.querySelector("#cine")?.addEventListener("click", (ev) => {
+      const on = !(ev.currentTarget as HTMLButtonElement).classList.contains("on");
+      press(ev.currentTarget as HTMLButtonElement, on);
+      this.setShorts(on);
+      this.onCamera(on ? "cine" : "threequarter");
+    });
+    document.querySelector("#dock")?.addEventListener("click", (ev) => {
+      const btn = (ev.target as HTMLElement).closest("button");
+      if (!btn?.dataset.sheet) return;
+      const name = btn.dataset.sheet;
+      const open = document.body.dataset.sheet === name ? "" : name;
+      document.body.dataset.sheet = open;
+      document.body.classList.toggle("sheet-motor", open === "motor");
+      document.body.classList.toggle("sheet-drive", open === "drive");
+      document.body.classList.toggle("sheet-data", open === "data");
+      document.querySelectorAll("#dock button").forEach((b) => {
+        b.classList.toggle("on", (b as HTMLElement).dataset.sheet === open);
+      });
+    });
     document.querySelector("#sound")?.addEventListener("click", () => this.onSound());
     document.querySelector("#drawer-left")?.addEventListener("click", () => {
       document.body.classList.toggle("show-left");
@@ -232,6 +290,7 @@ export class Hud {
   private setShorts(on: boolean): void {
     this.shorts = on;
     document.body.classList.toggle("shorts", on);
+    if (!on) press(document.querySelector("#cine") as HTMLButtonElement, false);
     const broadcast = document.querySelector("#broadcast") as HTMLElement;
     broadcast.hidden = !on;
     press(document.querySelector("#shorts") as HTMLButtonElement, on);
@@ -451,6 +510,36 @@ function bar(sel: string, value: number): void {
 function nf2(n: number): string {
   return new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 }
+
+const STROKES: Record<string, string> = {
+  intake: "Piston aşağı inerken emme supabı açılır. Benzinde hava-yakıt karışımı, dizelde temiz hava silindire dolar.",
+  compression: "İki supap da kapalı. Piston yükseldikçe yükü sıkıştırır; sıcaklık ve basınç artar.",
+  power: "Benzinde buji çakar, dizelde püsküren yakıt sıcak havada tutuşur. Genleşen gaz pistonu aşağı iter. Krank bu itişi döndürür.",
+  exhaust: "Egzoz supabı açılır. Piston yanmış gazı manifolda ve turboya doğru süpürür.",
+};
+
+const PARTS: Record<string, string> = {
+  "Krank mili": "Doğrusal piston hareketini döndürür. Ana muylular yataklarda döner, kol muyluları biyelin büyük ucunu taşır. Karşı ağırlıklar dengeyi sağlar.",
+  "Krank kasnağı": "Triger kayışı ve aksesuarlar bu kasnaktan tahrik alır.",
+  "Volan": "Krankın ucundaki ağır disk devri düzgün tutar ve marş dişlisini taşır.",
+  "Biyel": "Pistonu krank kol muylusuna bağlar. Gövde I kesitlidir; büyük uç kapaklı ve cıvatalı, küçük uç piston pimine geçer.",
+  "Piston": "Alüminyum gövde, segman yuvaları ve etek. Pim yuvasından biyele bağlanır. Tepe, yanma odasının tabanıdır.",
+  "Emme supabı": "Emme zamanında açılır, taze dolguyu silindire alır.",
+  "Egzoz supabı": "Egzoz zamanında açılır, yanmış gazı dışarı bırakır. Daha sıcak çalışır.",
+  "Emme manifoldu": "Havayı silindirlere dağıtan kollektör.",
+  "Egzoz manifoldu": "Silindirlerden çıkan gazı birleştirir. Turboda bu gaz türbini döndürür.",
+  "Triger kayışı": "Krank ile eksantrik millerini birlikte döndürür. Koparsa supaplar pistonla çarpışabilir.",
+  "Turboşarj": "Egzoz türbini kompresörü çevirir, motora basınçlı hava basar.",
+  "Yağ karteri": "Yağın toplandığı alt hazne. Seviye düşünce film incelir ve biyel yatağı zarar görür.",
+  "Soğutma suyu deposu": "Soğutma sıvısının genleşme kabı. Conta yanınca burada kabarcık görülür.",
+  "Buji": "Sıkışmış karışımı kıvılcımla ateşler.",
+  "Enjektör": "Dizel yakıtı sıcak, sıkışmış havanın içine püskürtür.",
+  "Kızdırma bujisi": "Soğuk dizelde yanma odasını ısıtır.",
+  "Karter": "Krankı taşıyan döküm gövde.",
+  "Blok": "Silindirlerin açıldığı ana gövde.",
+  "Kapak": "Üstteki supap kapağı. Kamlar ve yağ bunun altındadır.",
+  "Motor plakası": "Seçili motorun adı ve düzeni.",
+};
 
 function sameSpec(a: EngineSpec, b: EngineSpec): boolean {
   return a.fuel === b.fuel && a.aspiration === b.aspiration && a.layout === b.layout

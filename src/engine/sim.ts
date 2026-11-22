@@ -206,11 +206,13 @@ export class Simulation {
     this.rpm = clamp(this.rpm, 0, red * 1.25);
 
     let wobble = 0;
-    if (!this.seized && this.rpm > 500 && this.rpm < 1200 && this.rodStage === 0) {
-      wobble = Math.sin(this.time * 2.5) * 16 + Math.sin(this.time * 7.1) * 5;
+    const healthySpin = !this.seized && this.rodStage === 0 && !this.gasket && !this.timing && !this.heatSeize;
+    if (healthySpin && this.rpm > 550 && this.rpm < 1100) {
+      wobble = Math.sin(this.time * 2.2) * 4;
     }
     if (this.gasket && !this.seized) wobble += Math.sin(this.time * 23) * 28;
     if (this.rodStage === 1) wobble += Math.sin(this.time * 47) * 40 * this.knock;
+    if (this.timing && !this.seized) wobble += Math.sin(this.time * 31) * 22;
 
     const spin = Math.max(0, this.rpm + wobble);
     this.indicatedRpm = spin;
@@ -248,8 +250,16 @@ export class Simulation {
     this.powerKw = est.powerKw * health;
     this.powerPs = est.powerPs * health;
 
-    const idleVibe = this.rpm > 350 && !this.seized ? (this.rpm / 5000) * (0.25 + this.throttle) * 0.12 : 0;
-    const wantShake = idleVibe + this.knock * (this.rodStage === 2 ? 1 : 0.72) + (this.seized ? 0.18 : 0);
+    const idleWindow = healthySpin && this.rpm > 450 && this.rpm < 1400;
+    const idleVibe = idleWindow ? (1 - (this.rpm - 450) / 950) * 0.04 : 0;
+    let fault = 0;
+    if (this.rodStage === 1) fault += 0.62 + this.knock * 0.38;
+    if (this.rodStage === 2) fault += 1;
+    if (this.gasket && !this.seized) fault += 0.34;
+    if (this.timing) fault += 0.48;
+    if (this.heatSeize && !this.seized) fault += 0.44;
+    if (this.seized && this.rodStage !== 2) fault += 0.2;
+    const wantShake = idleVibe + fault;
     this.shake += (wantShake - this.shake) * (1 - Math.exp(-dt / 0.08));
     if (this.seized && this.rodStage !== 2) this.shake *= Math.max(0, 1 - dt * 0.4);
 

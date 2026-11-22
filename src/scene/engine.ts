@@ -20,7 +20,7 @@ import { ParticleField } from "./particles";
 
 interface RodRig {
   pivot: THREE.Group;
-  shaft: THREE.Mesh;
+  shaft: THREE.Object3D;
   big: THREE.Group;
 }
 
@@ -120,6 +120,7 @@ export class EngineAssembly {
   private readonly down = new THREE.Vector3(0, -1, 0);
   private fireLocal = new THREE.Vector3();
   private fireStrength = 0;
+  hoverName = "";
 
   constructor(spec: EngineSpec) {
     this.spec = spec;
@@ -170,18 +171,23 @@ export class EngineAssembly {
       this.spawnBeltBits();
     }
     if (this.pan) this.pan.position.y = this.panBase - view.explode * dims.bore * 0.85;
-    for (const label of this.labels) label.visible = view.labels;
+    for (const label of this.labels) {
+      label.visible = view.labels;
+      label.element.classList.toggle("on", !!this.hoverName && label.element.textContent === this.hoverName);
+    }
 
     if (sim.rodStage === 2 && !this.rodGone) this.breakRod(sim.rodCylinder);
     if (sim.punch && !this.holeMade) this.punchBlock();
 
     this.fireStrength = 0;
     const timingCrash = sim.timing;
-    const amp = sim.shake * (sim.rodStage === 2 ? 6.5 : 2.4);
-    this.root.position.x = this.basePos.x + Math.sin(sim.time * 73) * amp;
-    this.root.position.y = this.basePos.y + Math.cos(sim.time * 61) * amp * 0.45;
-    this.root.position.z = this.basePos.z + Math.sin(sim.time * 83) * amp * 0.3;
-    this.root.rotation.z = Math.sin(sim.time * 67) * sim.shake * 0.018;
+    const fault = sim.rodStage > 0 || sim.seized || sim.timing || sim.gasket || sim.heatSeize;
+    const amp = sim.shake * (sim.rodStage === 2 ? 1.2 : fault ? 0.58 : 0.16);
+    const hz = fault ? 36 : 13;
+    this.root.position.x = this.basePos.x + Math.sin(sim.time * hz) * amp;
+    this.root.position.y = this.basePos.y + Math.cos(sim.time * hz * 0.7) * amp * 0.28;
+    this.root.position.z = this.basePos.z + Math.sin(sim.time * hz * 1.15) * amp * 0.18;
+    this.root.rotation.z = Math.sin(sim.time * hz * 0.55) * amp * 0.015;
 
     for (const cyl of this.cyls) {
       const phase = phaseDeg(sim.crankDeg, cyl.geom.fireDeg);
@@ -356,13 +362,14 @@ export class EngineAssembly {
       coverMat.clearcoat = 0.65;
       coverMat.clearcoatRoughness = 0.28;
     }
-    const steel = this.metal(0xb7bcc4, 0.22);
-    const steelDark = this.metal(0x6d737a, 0.38);
-    const pistonMat = this.metal(0xd5d8dc, 0.28);
-    const rodMat = this.metal(0x8a9096, 0.34);
+    const steel = this.metal(0xd2d7de, 0.16, "steel");
+    const steelDark = this.metal(0x6a727a, 0.4, "forged");
+    const pistonMat = this.metal(0xdce1e7, 0.2, "alloy");
+    const rodMat = this.metal(0xa7b0b8, 0.3, "forged");
     const intakeMat = this.housingMat(0x2e333a, 0.45, 0.55);
 
     this.buildCrank(geoms, steel, steelDark);
+    this.crank.userData.part = "Krank mili";
     this.root.add(this.crank);
 
     const byBank = new Map<number, CylGeom[]>();
@@ -543,31 +550,23 @@ export class EngineAssembly {
 
   private buildCrank(geoms: CylGeom[], steel: THREE.Material, dark: THREE.Material): void {
     const dims = this.dims;
-    const pinGeo = this.track(new THREE.CylinderGeometry(dims.pinR, dims.pinR, dims.bore * 0.2, 18));
+    const segs = preferLite() ? 12 : 20;
+    const pinLen = dims.bore * 0.28;
+    const pinGeo = this.track(new THREE.CylinderGeometry(dims.pinR, dims.pinR, pinLen, segs));
     pinGeo.rotateZ(Math.PI / 2);
-    const journals = new Set<number>();
+    const webGeo = this.track(crankWebGeometry(dims.r, dims.bore * 0.085, preferLite() ? 14 : 24));
     for (const c of geoms) {
       const pin = new THREE.Mesh(pinGeo, steel);
       pin.position.set(c.x, Math.cos(c.pin) * dims.r, Math.sin(c.pin) * dims.r);
       pin.castShadow = true;
       this.crank.add(pin);
 
-      const web = new THREE.Mesh(this.track(new THREE.BoxGeometry(dims.bore * 0.1, dims.r * 0.95, dims.bore * 0.16)), dark);
-      web.position.set(c.x, Math.cos(c.pin) * dims.r * 0.48, Math.sin(c.pin) * dims.r * 0.48);
-      web.rotation.x = c.pin;
-      web.castShadow = true;
-      this.crank.add(web);
-
-      if (!journals.has(c.journal)) {
-        journals.add(c.journal);
-        const cwGeo = this.track(new THREE.CylinderGeometry(dims.r * 0.92, dims.r * 0.92, dims.bore * 0.12, 20));
-        cwGeo.rotateZ(Math.PI / 2);
-        cwGeo.translate(0, -dims.r * 0.7, 0);
-        const cw = new THREE.Mesh(cwGeo, dark);
-        cw.position.set(c.journalX, 0, 0);
-        cw.rotation.x = c.pin;
-        cw.castShadow = true;
-        this.crank.add(cw);
+      for (const side of [-1, 1]) {
+        const web = new THREE.Mesh(webGeo, dark);
+        web.position.set(c.x + side * pinLen * 0.5, 0, 0);
+        web.rotation.x = c.pin;
+        web.castShadow = true;
+        this.crank.add(web);
       }
     }
 
@@ -856,41 +855,70 @@ export class EngineAssembly {
 
   private makePiston(dims: Dims, mat: THREE.Material, pinMat: THREE.Material): THREE.Group {
     const g = new THREE.Group();
-    const h = dims.crown + dims.skirt;
-    const body = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.455, dims.bore * 0.45, h, 28)), mat);
-    body.position.y = (dims.crown - dims.skirt) / 2;
-    body.castShadow = true;
-    const dome = new THREE.Mesh(this.track(new THREE.SphereGeometry(dims.bore * 0.455, 20, 10, 0, Math.PI * 2, 0, 1.05)), mat);
-    dome.position.y = dims.crown * 0.72;
-    dome.scale.y = 0.45;
-    g.add(body, dome);
-    const ringMat = this.plain(0x2a2c30, 0.4, 0.6);
+    const segs = preferLite() ? 16 : 28;
+    const skirtH = dims.skirt * 0.92;
+    const skirt = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.448, dims.bore * 0.43, skirtH, segs)), mat);
+    skirt.position.y = dims.crown * 0.15 - skirtH * 0.45;
+    skirt.castShadow = true;
+    const crown = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.455, dims.bore * 0.45, dims.crown * 0.7, segs)), mat);
+    crown.position.y = dims.crown * 0.42;
+    crown.castShadow = true;
+    const dish = new THREE.Mesh(this.track(new THREE.SphereGeometry(dims.bore * 0.28, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.45)), this.metal(0x9aa3ab, 0.35, "alloy"));
+    dish.position.y = dims.crown * 0.78;
+    dish.scale.y = 0.35;
+    g.add(skirt, crown, dish);
+    const ringMat = this.metal(0x23272c, 0.32, "steel");
     for (let i = 0; i < 3; i++) {
-      const ring = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.482, dims.bore * 0.482, dims.bore * 0.03, 28, 1, true)), ringMat);
-      ring.position.y = dims.crown - dims.bore * 0.08 - i * dims.bore * 0.055;
-      g.add(ring);
+      const y = dims.crown - dims.bore * 0.07 - i * dims.bore * 0.055;
+      const groove = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.432, dims.bore * 0.432, dims.bore * 0.028, segs)), mat);
+      groove.position.y = y;
+      const ring = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.488, dims.bore * 0.488, dims.bore * 0.018, segs, 1, true)), ringMat);
+      ring.position.y = y;
+      g.add(groove, ring);
     }
-    const pin = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.085, dims.bore * 0.085, dims.bore * 0.7, 12)), pinMat);
+    const bossGeo = this.track(new THREE.CylinderGeometry(dims.bore * 0.11, dims.bore * 0.11, dims.bore * 0.16, 10));
+    bossGeo.rotateZ(Math.PI / 2);
+    for (const side of [-1, 1]) {
+      const boss = new THREE.Mesh(bossGeo, mat);
+      boss.position.set(side * dims.bore * 0.16, -dims.skirt * 0.15, 0);
+      g.add(boss);
+    }
+    const pin = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.07, dims.bore * 0.07, dims.bore * 0.72, 12)), pinMat);
     pin.rotation.z = Math.PI / 2;
+    pin.castShadow = true;
     g.add(pin);
     return g;
   }
 
   private makeRod(dims: Dims, mat: THREE.Material, boltMat: THREE.Material): RodRig {
     const pivot = new THREE.Group();
-    const shaft = new THREE.Mesh(this.track(new THREE.BoxGeometry(dims.bore * 0.16, 1, dims.bore * 0.1)), mat);
-    shaft.castShadow = true;
+    const shaft = new THREE.Group();
+    const flangeGeo = this.track(new THREE.BoxGeometry(dims.bore * 0.055, 1, dims.bore * 0.2));
+    for (const side of [-1, 1]) {
+      const flange = new THREE.Mesh(flangeGeo, mat);
+      flange.position.x = side * dims.bore * 0.055;
+      flange.castShadow = true;
+      shaft.add(flange);
+    }
+    const web = new THREE.Mesh(this.track(new THREE.BoxGeometry(dims.bore * 0.11, 1, dims.bore * 0.055)), mat);
+    web.castShadow = true;
+    shaft.add(web);
     const big = new THREE.Group();
-    const eye = new THREE.Mesh(this.track(new THREE.TorusGeometry(dims.pinR * 1.15, dims.pinR * 0.48, 8, 16)), mat);
+    const eye = new THREE.Mesh(this.track(new THREE.TorusGeometry(dims.pinR * 1.2, dims.pinR * 0.42, 8, 18)), mat);
     eye.rotation.y = Math.PI / 2;
-    big.add(eye);
+    eye.castShadow = true;
+    const cap = new THREE.Mesh(this.track(new THREE.BoxGeometry(dims.pinR * 2.1, dims.pinR * 0.72, dims.pinR * 1.55)), mat);
+    cap.position.y = -dims.pinR * 1.22;
+    cap.castShadow = true;
+    big.add(eye, cap);
     for (const s of [-1, 1]) {
-      const bolt = new THREE.Mesh(this.track(new THREE.CylinderGeometry(2.1, 2.1, dims.pinR * 1.3, 6)), boltMat);
-      bolt.position.set(0, -dims.pinR * 0.15, s * dims.pinR * 0.85);
+      const bolt = new THREE.Mesh(this.track(new THREE.CylinderGeometry(2.2, 2.2, dims.pinR * 1.55, 6)), boltMat);
+      bolt.position.set(0, -dims.pinR * 1.05, s * dims.pinR * 0.72);
       big.add(bolt);
     }
-    const small = new THREE.Mesh(this.track(new THREE.TorusGeometry(dims.bore * 0.12, dims.bore * 0.055, 8, 14)), mat);
+    const small = new THREE.Mesh(this.track(new THREE.TorusGeometry(dims.bore * 0.11, dims.bore * 0.048, 8, 16)), mat);
     small.rotation.y = Math.PI / 2;
+    small.castShadow = true;
     pivot.add(shaft, big, small);
     return { pivot, shaft, big };
   }
@@ -972,7 +1000,8 @@ export class EngineAssembly {
     this.q1.setFromUnitVectors(this.down, this.v3);
     rod.pivot.position.copy(small);
     rod.pivot.quaternion.copy(this.q1);
-    rod.shaft.scale.y = len;
+    const span = Math.max(8, len * 0.7);
+    rod.shaft.scale.y = span;
     rod.shaft.position.y = -len / 2;
     rod.big.position.y = -len;
   }
@@ -1218,8 +1247,17 @@ export class EngineAssembly {
     return this.keep(m, true);
   }
 
-  private metal(color: number, roughness: number): THREE.MeshStandardMaterial {
-    const m = new THREE.MeshStandardMaterial({ color, roughness, metalness: 1, envMapIntensity: 1.15 });
+  private metal(color: number, roughness: number, kind: "steel" | "alloy" | "forged" = "steel"): THREE.MeshPhysicalMaterial {
+    const alloy = kind === "alloy";
+    const forged = kind === "forged";
+    const m = new THREE.MeshPhysicalMaterial({
+      color,
+      roughness,
+      metalness: alloy ? 0.8 : 1,
+      clearcoat: alloy ? 0.4 : forged ? 0.14 : 0.06,
+      clearcoatRoughness: alloy ? 0.32 : 0.5,
+      envMapIntensity: alloy ? 0.9 : 1.28,
+    });
     this.mats.push(m);
     return m;
   }
@@ -1245,6 +1283,38 @@ export class EngineAssembly {
     this.mats.push(m);
     return m;
   }
+}
+
+function preferLite(): boolean {
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  const cores = navigator.hardwareConcurrency ?? 8;
+  const lowMemory = typeof nav.deviceMemory === "number" && nav.deviceMemory <= 4;
+  return (lowMemory && (coarse || cores <= 4)) || (coarse && cores <= 4);
+}
+
+function crankWebGeometry(radius: number, thick: number, steps: number): THREE.BufferGeometry {
+  const shape = new THREE.Shape();
+  for (let i = 0; i <= steps; i++) {
+    const a = (i / steps) * Math.PI * 2;
+    const lobe = Math.max(0, -Math.cos(a));
+    const rad = radius * (0.42 + lobe * 0.62);
+    const y = Math.cos(a) * rad;
+    const z = Math.sin(a) * rad * (0.62 + lobe * 0.18);
+    if (i === 0) shape.moveTo(z, y);
+    else shape.lineTo(z, y);
+  }
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: thick,
+    bevelEnabled: true,
+    bevelThickness: Math.min(1.3, thick * 0.2),
+    bevelSize: Math.min(1.1, thick * 0.16),
+    bevelSegments: 1,
+    curveSegments: 1,
+  });
+  geo.translate(0, 0, -thick / 2);
+  geo.rotateY(Math.PI / 2);
+  return geo;
 }
 
 function paintBadge(canvas: HTMLCanvasElement, spec: EngineSpec): void {

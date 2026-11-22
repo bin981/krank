@@ -112,7 +112,7 @@ function loop(now: number): void {
     sim.oilLevel = hud.oilLevel;
     sim.radiatorBlocked = hud.radiatorBlocked;
     sim.spec.boostTarget = hud.spec.boostTarget;
-    sim.update(dt);
+    sim.update(dt * hud.timeScale);
     studio.update(sim, view, dt);
     audio.update(sim);
     hud.sync(sim, studio.hover);

@@ -50,6 +50,15 @@
             <button type="button" id="exit-shorts" class="exit-shorts">Kadrajdan çık</button>
           </div>
           <p id="hover" class="hover-name"></p>
+          <aside id="part-card" hidden>
+            <strong id="part-name"></strong>
+            <p id="part-blurb"></p>
+          </aside>
+          <aside id="tour-card" hidden>
+            <p class="kicker">Rehber</p>
+            <h3 id="tour-title">Emme</h3>
+            <p id="tour-text"></p>
+          </aside>
           <p id="banner" class="banner ok" hidden></p>
         </div>
       </div>
@@ -108,9 +117,15 @@
 
       <aside id="right" class="panel">
         <p class="kicker">Telemetri</p>
-        <div class="tach">
-          <b id="rpm-read">2.400</b>
-          <span>dev/dk</span>
+        <div class="gauge">
+          <svg viewBox="0 0 120 78" aria-hidden="true">
+            <path class="gauge-track" pathLength="100" d="M14 66 A 46 46 0 0 1 106 66" />
+            <path id="gauge-arc" pathLength="100" d="M14 66 A 46 46 0 0 1 106 66" />
+          </svg>
+          <div class="tach">
+            <b id="rpm-read">2.400</b>
+            <span>dev/dk</span>
+          </div>
         </div>
         <div class="stats">
           <div><em>Tork</em><strong id="torque">0 Nm</strong></div>
@@ -165,6 +180,9 @@
         </label>
         <button type="button" id="labels" class="ghost on" aria-pressed="true">Etiketler</button>
         <button type="button" id="spin" class="ghost" aria-pressed="false">Döndür</button>
+        <button type="button" id="tour" class="ghost" aria-pressed="false">Tur</button>
+        <button type="button" id="slow" class="ghost" aria-pressed="false">Ağır çekim</button>
+        <button type="button" id="cine" class="ghost" aria-pressed="false">Sinema</button>
         <div class="seg cams">
           <button type="button" data-cam="threequarter">¾</button>
           <button type="button" data-cam="side">Yan</button>
@@ -173,6 +191,11 @@
         </div>
       </footer>
     </div>
+    <nav id="dock" aria-label="Paneller">
+      <button type="button" data-sheet="motor">Motor</button>
+      <button type="button" data-sheet="drive">Sürüş</button>
+      <button type="button" data-sheet="data">Veri</button>
+    </nav>
     <div id="boot-error" hidden role="alert">
       <div class="boot-card">
         <p class="kicker">WebGL</p>
