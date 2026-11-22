@@ -74,6 +74,24 @@
         <h2>Motoru kur</h2>
         <div id="presets" class="chips"></div>
         <article id="spec-card" class="spec-card"></article>
+        <section id="cam-box">
+          <p class="kicker">Eksantrik</p>
+          <div class="seg wrap" id="cam-pick">
+            <button type="button" data-cam-id="stock" class="on">Stok</button>
+            <button type="button" data-cam-id="c272">272°</button>
+            <button type="button" data-cam-id="c288">288°</button>
+            <button type="button" data-cam-id="c304">304°</button>
+          </div>
+          <label class="slider">Derece (LSA) <b id="lsa-val">110°</b>
+            <input id="lsa" type="range" min="100" max="116" step="1" value="110" />
+          </label>
+          <label class="slider">Avans / Rötar <b id="adv-val">0°</b>
+            <input id="cam-adv" type="range" min="-12" max="12" step="1" value="0" />
+          </label>
+          <p id="cam-events" class="hint">Bindirme 0°</p>
+          <canvas id="degree-wheel" width="280" height="280"></canvas>
+          <p id="valve-warn" class="status warn" hidden>Kalkış veya avans supabı pistona yaklaştırıyor.</p>
+        </section>
 
         <fieldset>
           <legend>Yakıt</legend>
@@ -214,6 +232,25 @@
         </label>
         <label class="grow">Gaz
           <input id="throttle" type="range" min="0" max="100" step="1" value="45" />
+        </label>
+        <label class="slider">Titreşim
+          <select id="vibe">
+            <option value="off">Kapalı</option>
+            <option value="low" selected>Az</option>
+            <option value="real">Gerçekçi</option>
+          </select>
+        </label>
+        <label class="slider">Ses <b id="vol-val">%80</b>
+          <input id="vol" type="range" min="0" max="100" step="1" value="80" />
+        </label>
+        <label class="slider">Egzoz <b id="mix-ex-val">%85</b>
+          <input id="mix-ex" type="range" min="0" max="100" value="85" />
+        </label>
+        <label class="slider">Emme <b id="mix-in-val">%55</b>
+          <input id="mix-in" type="range" min="0" max="100" value="55" />
+        </label>
+        <label class="slider">Mekanik <b id="mix-me-val">%40</b>
+          <input id="mix-me" type="range" min="0" max="100" value="40" />
         </label>
         <div class="seg" id="viewmode">
           <button type="button" data-value="solid" class="on">Kapalı</button>

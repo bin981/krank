@@ -290,7 +290,10 @@ body.shorts #frame {
 .spec-card dt { color: var(--muted); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
 .spec-card dd { margin: 0 0 6px; font-size: 13px; }
 .spec-card p { margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
-#vlift { width: 100%; height: 110px; display: block; background: #0c0e0a; border: 1px solid #2a2e24; border-radius: 8px; }
+#vlift, #degree-wheel { width: 100%; height: auto; display: block; background: #0c0e0a; border: 1px solid #2a2e24; border-radius: 12px; }
+#degree-wheel { max-width: 220px; margin: 8px auto; }
+#cam-box { margin-top: 8px; }
+select, #vibe { background: #151910; color: inherit; border: 1px solid #34392c; border-radius: 8px; padding: 6px 8px; }
 .key { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .key button { border-radius: 12px; border: 1px solid #34392c; background: #151910; min-height: 44px; }
 .key button.on { background: var(--acid); color: #14160c; border-color: var(--acid); }

@@ -91,9 +91,11 @@ function applySpec(spec: EngineSpec): void {
 rebuild(hud.spec, 2400);
 sim.throttle = 0.45;
 
-window.addEventListener("pointerdown", () => {
+const unlockAudio = () => {
   void audio.start().then(() => hud.setSoundLabel(true));
-}, { once: true });
+};
+window.addEventListener("pointerdown", unlockAudio, { once: true });
+window.addEventListener("touchend", unlockAudio, { once: true });
 
 const resize = () => studio.resize();
 window.addEventListener("resize", resize);
@@ -112,6 +114,14 @@ function loop(now: number): void {
     if (view && hud.shortsOn !== studio.shorts) studio.setShorts(hud.shortsOn);
     sim.throttle = hud.throttle;
     sim.requestedRpm = hud.rpm;
+    sim.vibe = hud.vibe;
+    sim.camId = hud.camId;
+    sim.camLsa = hud.camLsa;
+    sim.camAdvance = hud.camAdvance;
+    audio.volume = hud.volume;
+    audio.mixExhaust = hud.mixExhaust;
+    audio.mixIntake = hud.mixIntake;
+    audio.mixMech = hud.mixMech;
     if (!sim.workshop && !sim.seized && !sim.heatSeize && sim.rodStage < 2) sim.targetRpm = hud.rpm;
     sim.oilLevel = hud.oilLevel;
     sim.radiatorBlocked = hud.radiatorBlocked;

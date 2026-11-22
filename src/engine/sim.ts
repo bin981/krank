@@ -9,8 +9,10 @@ import {
   smoothstep,
   clamp,
 } from "./model";
+import { applyScenario, scenarioById } from "../scenarios";
 
 export type FailId = "rod" | "gasket" | "turbo" | "timing" | "seizure";
+export type VibeMode = "off" | "low" | "real";
 export type KeyPos = "off" | "acc" | "on" | "start";
 
 export class Simulation {
@@ -61,6 +63,32 @@ export class Simulation {
   voltage = 12.6;
   bayMessage = "";
   bayLevel: "ok" | "warn" | "bad" = "ok";
+  /** Kapalı / Az / Gerçekçi. Az varsayılan. prefers-reduced-motion Kapalı sayılır. */
+  vibe: VibeMode = "low";
+  scenarioId = "none";
+  scenarioAge = 0;
+  smoke: "none" | "white" | "blue" | "black" = "none";
+  lamps = { bat: false, oil: false, temp: false, cel: false, glow: false };
+  misfireCyl = -1;
+  vtecBlocked = false;
+  noFuel = false;
+  limp = false;
+  starterDead = false;
+  noCrank = false;
+  alternatorDead = false;
+  boostLeak = false;
+  cold = false;
+  railBar = 400;
+  stft = 0;
+  ltft = 0;
+  camId = "stock";
+  /** Lob ayrım açısı, kam derecesi. */
+  camLsa = 110;
+  /** Krank derecesi. Artı = avans. */
+  camAdvance = 0;
+  vacuum = 62;
+  valveWarn = false;
+  private clashAcc = 0;
 
   rodStage: 0 | 1 | 2 = 0;
   rodAge = 0;
@@ -201,9 +229,37 @@ export class Simulation {
   }
 
   isMisfire(index: number, atDeg = this.crankDeg): boolean {
+    if (this.misfireCyl === index) return true;
     if (!this.gasket || !this.leakCyls.has(index)) return false;
     const cycle = Math.floor(atDeg / 720);
     return (index * 17 + cycle * 13) % 10 < 7;
+  }
+
+  /** 0 = yok, 0.1 = Az (sağlıklı titreşimin onda biri), 0.35 = Gerçekçi. */
+  vibeGain(): number {
+    const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced || this.vibe === "off") return 0;
+    return this.vibe === "low" ? 0.1 : 0.35;
+  }
+
+  setScenario(id: string): void {
+    this.scenarioId = id;
+    this.scenarioAge = 0;
+    this.misfireCyl = -1;
+    this.vtecBlocked = false;
+    this.noFuel = false;
+    this.limp = false;
+    this.starterDead = false;
+    this.noCrank = false;
+    this.alternatorDead = false;
+    this.boostLeak = false;
+    this.cold = false;
+    this.batteryWeak = false;
+    this.stft = 0;
+    this.ltft = 0;
+    this.railBar = this.spec.fuel === "dizel" ? 1400 : 3.5;
+    this.smoke = "none";
+    if (id !== "none") scenarioById(id)?.prime?.(this);
   }
 
   update(dt: number): void {
@@ -243,26 +299,32 @@ export class Simulation {
 
     this.stepWorkshop(dt);
     const vtecSwitch = spec.vtecRpm ?? 5500;
-    const wantVtec = spec.valvetrain === "dohc16-vtec" && (this.vtecForce || this.rpm >= vtecSwitch);
+    const wantVtec = !this.vtecBlocked && spec.valvetrain === "dohc16-vtec" && (this.vtecForce || this.rpm >= vtecSwitch);
     const prevVtec = this.vtecEngaged;
     this.vtecEngaged += ((wantVtec ? 1 : 0) - this.vtecEngaged) * (1 - Math.exp(-dt / 0.07));
     if (prevVtec < 0.55 && this.vtecEngaged >= 0.55) this.events.push("vtec");
 
     let goal = this.targetRpm;
     if (this.heatSeize) goal = Math.min(goal, 650);
-    if (this.seized || this.rodStage === 2) goal = 0;
+    if (this.seized || this.rodStage === 2 || this.noFuel) goal = 0;
+    if (this.limp) goal = Math.min(goal, 2200);
     const tau = this.seized || this.rodStage === 2 ? 0.22 : this.heatSeize ? 0.8 : 0.55;
     this.rpm += (goal - this.rpm) * (1 - Math.exp(-dt / tau));
     this.rpm = clamp(this.rpm, 0, red * 1.25);
 
+    const gain = this.vibeGain();
     let wobble = 0;
-    const healthySpin = !this.seized && this.rodStage === 0 && !this.gasket && !this.timing && !this.heatSeize;
+    const healthySpin = !this.seized && this.rodStage === 0 && !this.gasket && !this.timing && !this.heatSeize && this.misfireCyl < 0;
+    const pulse = Math.max(0, Math.sin(this.time * 2.4));
     if (healthySpin && this.rpm > 550 && this.rpm < 1100) {
-      wobble = Math.sin(this.time * 2.2) * 4;
+      wobble = Math.sin(this.time * 2.2) * 4 * gain;
     }
-    if (this.gasket && !this.seized) wobble += Math.sin(this.time * 23) * 28;
-    if (this.rodStage === 1) wobble += Math.sin(this.time * 47) * 40 * this.knock;
-    if (this.timing && !this.seized) wobble += Math.sin(this.time * 31) * 22;
+    if (gain > 0 && pulse > 0.65) {
+      if (this.gasket && !this.seized) wobble += Math.sin(this.time * 17) * 6 * gain;
+      if (this.misfireCyl >= 0 && !this.seized) wobble += Math.sin(this.time * 13) * 5 * gain;
+      if (this.rodStage === 1) wobble += Math.sin(this.time * 23) * 8 * this.knock * gain;
+      if (this.timing && !this.seized) wobble += Math.sin(this.time * 19) * 7 * gain;
+    }
 
     const spin = Math.max(0, this.rpm + wobble);
     this.indicatedRpm = spin;
@@ -296,20 +358,25 @@ export class Simulation {
       ? { torqueNm: 0, powerKw: 0, powerPs: 0 }
       : estimatePower(spec, this.rpm, this.throttle, this.boost, this.vtecEngaged > 0.55);
     const health = (this.gasket ? 0.84 : 1) * (this.turboFail && spec.aspiration === "turbo" ? 0.95 : 1);
-    this.torqueNm = est.torqueNm * health;
-    this.powerKw = est.powerKw * health;
-    this.powerPs = est.powerPs * health;
+    const cardAdv = this.camId === "stock" ? 0 : this.camId === "c272" ? 272 : this.camId === "c288" ? 288 : 304;
+    const camK = cardAdv > 0 ? (cardAdv - 250) / 380 : 0;
+    const camShape = camK === 0 ? 1 : this.rpm < 3400 ? 1 - camK * 1.15 : 1 + camK * 0.5;
+    const shaped = clamp(camShape, 0.5, 1.28);
+    this.torqueNm = est.torqueNm * health * shaped;
+    this.powerKw = est.powerKw * health * shaped;
+    this.powerPs = est.powerPs * health * shaped;
 
     const idleWindow = healthySpin && this.rpm > 450 && this.rpm < 1400;
-    const idleVibe = idleWindow ? (1 - (this.rpm - 450) / 950) * 0.04 : 0;
+    const idleVibe = idleWindow ? (1 - (this.rpm - 450) / 950) * 0.04 * gain : 0;
     let fault = 0;
-    if (this.rodStage === 1) fault += 0.62 + this.knock * 0.38;
-    if (this.rodStage === 2) fault += 1;
-    if (this.gasket && !this.seized) fault += 0.34;
-    if (this.timing) fault += 0.48;
-    if (this.heatSeize && !this.seized) fault += 0.44;
-    if (this.seized && this.rodStage !== 2) fault += 0.2;
-    const wantShake = idleVibe + fault;
+    const hit = pulse > 0.72 ? 1 : 0;
+    if (this.rodStage === 1) fault += hit * (0.22 + this.knock * 0.12);
+    if (this.rodStage === 2) fault += 0.28;
+    if (this.gasket && !this.seized) fault += hit * 0.12;
+    if (this.misfireCyl >= 0 && !this.seized) fault += hit * 0.1;
+    if (this.timing) fault += hit * 0.16;
+    if (this.heatSeize && !this.seized) fault += hit * 0.1;
+    const wantShake = (idleVibe + fault) * (gain > 0 ? 1 : 0);
     this.shake += (wantShake - this.shake) * (1 - Math.exp(-dt / 0.08));
     if (this.seized && this.rodStage !== 2) this.shake *= Math.max(0, 1 - dt * 0.4);
 
@@ -317,6 +384,18 @@ export class Simulation {
       /* mesaj arıza tarafından yönetilir */
     }
     this.stepVoltage();
+    applyScenario(this, dt);
+    const lift = this.camId === "c304" ? 13.4 : this.camId === "c288" ? 12.2 : this.camId === "c272" ? 11.2 : 9.2;
+    this.vacuum = clamp(80 - this.throttle * 58 - Math.max(0, (this.camId === "stock" ? 0 : lift - 9)) * 4 - Math.abs(this.camAdvance) * 0.6, 6, 88);
+    this.valveWarn = (lift >= 12.2 || this.camAdvance >= 8 || this.camId === "c304") && this.rpm > 2600;
+    if (this.valveWarn && this.rpm > 4300 && (this.camAdvance >= 8 || lift >= 13)) {
+      this.clashAcc += dt;
+      if (this.clashAcc > 2.4 && !this.timing) {
+        this.timing = true;
+        this.say("Supap pistona bindi — avans ve kalkış fazla", "bad");
+        this.events.push("clash");
+      }
+    } else this.clashAcc *= 0.92;
   }
 
   private electrical(): boolean {
@@ -343,7 +422,15 @@ export class Simulation {
       this.bayLevel = "bad";
       return;
     }
-    if (this.key === "start" && power && !this.seized) {
+    if (this.key === "start" && (this.starterDead || this.noCrank)) {
+      this.cranking = false;
+      this.targetRpm = 0;
+      if (this.scenarioAge % 0.45 < dt) this.events.push("snap");
+      this.bayMessage = this.starterDead ? "Selenoid tıklıyor, volan dönmüyor." : "Marş için voltaj yetmiyor.";
+      this.bayLevel = "bad";
+      return;
+    }
+    if (this.key === "start" && power && !this.seized && !this.noFuel) {
       this.cranking = true;
       this.crankAge += dt;
       this.bayMessage = "Marş motoru çeviriyor.";

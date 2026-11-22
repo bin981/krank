@@ -10,7 +10,7 @@ import {
   engineTitle,
   phaseDeg,
   camLift,
-  lobesFor,
+  activeCam,
   nf0,
   nf1,
   type Dims,
@@ -164,7 +164,7 @@ export class EngineAssembly {
     for (const bank of this.banks) {
       bank.head.position.y = shift;
       bank.cover.position.y = view.explode * dims.bore * 1.05;
-      const camAngle = sim.timing ? (this.frozenCam ?? crankRad / 2) : crankRad / 2;
+      const camAngle = (sim.timing ? (this.frozenCam ?? crankRad / 2) : crankRad / 2) + (sim.camAdvance * Math.PI) / 180;
       for (const cam of bank.cams) cam.rotation.x = camAngle;
     }
     if (sim.timing && this.frozenCam === null) {
@@ -183,17 +183,18 @@ export class EngineAssembly {
 
     this.fireStrength = 0;
     const timingCrash = sim.timing;
-    const fault = sim.rodStage > 0 || sim.seized || sim.timing || sim.gasket || sim.heatSeize;
-    const amp = sim.shake * (sim.rodStage === 2 ? 1.2 : fault ? 0.58 : 0.16);
-    const hz = fault ? 36 : 13;
+    const fault = sim.rodStage > 0 || sim.seized || sim.timing || sim.gasket || sim.heatSeize || sim.misfireCyl >= 0;
+    const burst = fault ? Math.max(0, Math.sin(sim.time * 2.2)) : 1;
+    const amp = sim.shake * (sim.rodStage === 2 ? 0.22 : fault ? 0.14 : 0.08) * burst;
+    const hz = fault ? 28 : 11;
     this.root.position.x = this.basePos.x + Math.sin(sim.time * hz) * amp;
-    this.root.position.y = this.basePos.y + Math.cos(sim.time * hz * 0.7) * amp * 0.28;
-    this.root.position.z = this.basePos.z + Math.sin(sim.time * hz * 1.15) * amp * 0.18;
-    this.root.rotation.z = Math.sin(sim.time * hz * 0.55) * amp * 0.015;
+    this.root.position.y = this.basePos.y + Math.cos(sim.time * hz * 0.7) * amp * 0.22;
+    this.root.position.z = this.basePos.z + Math.sin(sim.time * hz * 1.1) * amp * 0.12;
+    this.root.rotation.z = Math.sin(sim.time * hz * 0.5) * amp * 0.008;
 
     for (const cyl of this.cyls) {
       const phase = phaseDeg(sim.crankDeg, cyl.geom.fireDeg);
-      const lobes = lobesFor(sim.spec, sim.vtecEngaged > 0.55);
+      const lobes = activeCam(sim.spec, sim.vtecEngaged > 0.55, sim.camId, sim.camLsa, sim.camAdvance);
       const liftIn = timingCrash ? 1 : camLift(phase, lobes.intake);
       const liftEx = timingCrash ? 1 : camLift(phase, lobes.exhaust);
       const travel = timingCrash ? dims.crashLift : dims.maxLift;

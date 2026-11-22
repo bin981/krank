@@ -195,6 +195,7 @@ export class Studio {
   }
 
   update(sim: Simulation, view: ViewState, dt: number): void {
+    // Titreşim kamerayı oynatmaz. Kareleme hedefi sabit kalır.
     if (this.preset === "cine" && !this.interacting) {
       const ang = sim.time * 0.32;
       const d = this.dist * 0.96;

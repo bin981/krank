@@ -13,8 +13,11 @@ import {
   cylinderPressureBar,
   strokeOf,
   phaseDeg,
-  lobesFor,
+  activeCam,
   camLift,
+  camCard,
+  valvePoints,
+  CAM_CARDS,
   valvetrainLabel,
   injectionLabel,
   nf0,
@@ -35,6 +38,14 @@ export class Hud {
   private savedRpm = 2400;
   private tour = false;
   private slow = false;
+  camId = "stock";
+  camLsa = 110;
+  camAdvance = 0;
+  vibe: "off" | "low" | "real" = "low";
+  volume = 0.8;
+  mixExhaust = 0.85;
+  mixIntake = 0.55;
+  mixMech = 0.4;
 
   constructor(
     private readonly onSpec: (spec: EngineSpec) => void,
@@ -265,6 +276,41 @@ export class Hud {
       });
     });
     document.querySelector("#sound")?.addEventListener("click", () => this.onSound());
+    document.querySelector("#cam-pick")?.addEventListener("click", (ev) => {
+      const btn = (ev.target as HTMLElement).closest("button");
+      if (!btn?.dataset.camId) return;
+      this.camId = btn.dataset.camId;
+      const card = CAM_CARDS.find((c) => c.id === this.camId);
+      if (card) {
+        this.camLsa = card.lsa;
+        const lsa = document.querySelector("#lsa") as HTMLInputElement | null;
+        if (lsa) lsa.value = String(card.lsa);
+      }
+      this.mark(btn.parentElement as HTMLElement, btn);
+    });
+    document.querySelector("#lsa")?.addEventListener("input", () => {
+      this.camLsa = num("lsa");
+      text("#lsa-val", `${this.camLsa}°`);
+    });
+    document.querySelector("#cam-adv")?.addEventListener("input", () => {
+      this.camAdvance = num("cam-adv");
+      const sign = this.camAdvance > 0 ? "avans " : this.camAdvance < 0 ? "rötar " : "";
+      text("#adv-val", `${sign}${this.camAdvance}°`);
+    });
+    document.querySelector("#vibe")?.addEventListener("change", (ev) => {
+      this.vibe = (ev.target as HTMLSelectElement).value as typeof this.vibe;
+    });
+    const mix = (id: string, set: (v: number) => void, label: string) => {
+      document.querySelector("#" + id)?.addEventListener("input", () => {
+        const v = num(id) / 100;
+        set(v);
+        text("#" + label, `%${Math.round(v * 100)}`);
+      });
+    };
+    mix("vol", (v) => { this.volume = v; }, "vol-val");
+    mix("mix-ex", (v) => { this.mixExhaust = v; }, "mix-ex-val");
+    mix("mix-in", (v) => { this.mixIntake = v; }, "mix-in-val");
+    mix("mix-me", (v) => { this.mixMech = v; }, "mix-me-val");
     document.querySelector("#drawer-left")?.addEventListener("click", () => {
       document.body.classList.toggle("show-left");
       document.body.classList.remove("show-right");
@@ -424,7 +470,7 @@ export class Hud {
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    const lobes = lobesFor(sim.spec, sim.vtecEngaged > 0.55);
+    const lobes = activeCam(sim.spec, sim.vtecEngaged > 0.55, sim.camId, sim.camLsa, sim.camAdvance);
     const samples = 180;
     const intake: number[] = [];
     const exhaust: number[] = [];
@@ -454,12 +500,58 @@ export class Hud {
     };
     draw(exhaust, "#c7b6a2");
     draw(intake, "#7eb6ff");
+    this.paintDegree(sim, lobes);
     const phase = phaseDeg(sim.crankDeg, sim.cyls[0]?.fireDeg ?? 0);
     ctx.strokeStyle = "#ff4d1c";
     ctx.beginPath();
     ctx.moveTo((phase / 720) * w, 0);
     ctx.lineTo((phase / 720) * w, h);
     ctx.stroke();
+  }
+
+  private paintDegree(sim: Simulation, lobes: ReturnType<typeof activeCam>): void {
+    const card = camCard(sim.camId);
+    const pts = valvePoints(lobes, card.liftMm);
+    const fmt = (deg: number) => `${Math.round(deg)}°`;
+    text("#cam-events", `IVO ${fmt(pts.ivo)} · IVC ${fmt(pts.ivc)} · EVO ${fmt(pts.evo)} · EVC ${fmt(pts.evc)} @ 1 mm · Bindirme ${pts.overlap}° · Vakum ${nf0.format(sim.vacuum)} kPa`);
+    const warn = document.querySelector("#valve-warn") as HTMLElement | null;
+    if (warn) warn.hidden = !sim.valveWarn;
+    const canvas = document.querySelector("#degree-wheel") as HTMLCanvasElement | null;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    const cx = w / 2;
+    const cy = h / 2;
+    const r = w * 0.38;
+    ctx.strokeStyle = "#34392c";
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+    const mark = (deg: number, color: string) => {
+      const a = (-Math.PI / 2) + (deg / 720) * Math.PI * 2;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * (r - 10), cy + Math.sin(a) * (r - 10));
+      ctx.lineTo(cx + Math.cos(a) * (r + 8), cy + Math.sin(a) * (r + 8));
+      ctx.stroke();
+    };
+    mark(pts.ivo, "#7eb6ff");
+    mark(pts.ivc, "#7eb6ff");
+    mark(pts.evo, "#c7b6a2");
+    mark(pts.evc, "#c7b6a2");
+    const phase = phaseDeg(sim.crankDeg, sim.cyls[0]?.fireDeg ?? 0);
+    mark(phase, "#e2ff4d");
+    ctx.fillStyle = "#f3f0e4";
+    ctx.font = "16px Oswald, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(card.name, cx, cy - 6);
+    ctx.fillStyle = "#a39c8c";
+    ctx.font = "12px Manrope, sans-serif";
+    ctx.fillText(`Bindirme ${pts.overlap}°`, cx, cy + 14);
   }
 
   private paintNumbers(): void {

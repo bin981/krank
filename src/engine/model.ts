@@ -517,6 +517,85 @@ export function lobesFor(spec: EngineSpec, high: boolean): CamPair {
   return CAMS.gas;
 }
 
+export type CamId = "stock" | "c272" | "c288" | "c304";
+
+export interface CamCard {
+  id: CamId;
+  name: string;
+  /** İlan edilen süre @ 1 mm / 0.05 inç. 0 = stok. */
+  advertised: number;
+  /** Taban dairesinden taban dairesine süre, krank derecesi. */
+  seat: number;
+  liftMm: number;
+  lsa: number;
+}
+
+export const CAM_CARDS: CamCard[] = [
+  { id: "stock", name: "Stok", advertised: 0, seat: 248, liftMm: 9.2, lsa: 110 },
+  { id: "c272", name: "272°", advertised: 272, seat: 286, liftMm: 11.2, lsa: 110 },
+  { id: "c288", name: "288°", advertised: 288, seat: 304, liftMm: 12.2, lsa: 108 },
+  { id: "c304", name: "304°", advertised: 304, seat: 322, liftMm: 13.4, lsa: 106 },
+];
+
+export function camCard(id: string): CamCard {
+  return CAM_CARDS.find((c) => c.id === id) ?? CAM_CARDS[0];
+}
+
+/** Stok lobu + seçilen kart, LSA ve avans (krank derecesi, + avans). */
+export function activeCam(spec: EngineSpec, high: boolean, camId: string, lsa: number, advance: number): CamPair {
+  const base = lobesFor(spec, high);
+  const card = camCard(camId);
+  const stock = camCard("stock");
+  const useCard = card.id !== "stock";
+  const seatIn = useCard ? card.seat : base.intake.duration;
+  const seatEx = useCard ? card.seat * 0.97 : base.exhaust.duration;
+  const peak = useCard ? Math.min(1.15, card.liftMm / stock.liftMm) * (high ? 1 : 0.92) : (high ? base.intake.peak : base.intake.peak);
+  const lsaCrank = lsa * 2;
+  const stockCrank = stock.lsa * 2;
+  const spread = (lsaCrank - stockCrank) / 2;
+  const adv = advance;
+  return {
+    intake: { center: wrap720(base.intake.center + spread - adv), duration: seatIn, peak: useCard ? peak : base.intake.peak },
+    exhaust: { center: wrap720(base.exhaust.center - spread - adv), duration: seatEx, peak: useCard ? peak * 0.96 : base.exhaust.peak },
+    high,
+    label: useCard ? `${card.name} · LSA ${lsa}°` : base.label,
+  };
+}
+
+export interface ValvePoints {
+  ivo: number;
+  ivc: number;
+  evo: number;
+  evc: number;
+  overlap: number;
+}
+
+/** 1 mm kalkışta açılış/kapanış, krank derecesi (ateşleme ÜÖN = 0). */
+export function valvePoints(pair: CamPair, liftMm: number): ValvePoints {
+  const at = (lobe: LobeSpec, rising: boolean): number => {
+    const thr = 1 / Math.max(1, liftMm);
+    for (let i = 0; i < 720; i++) {
+      const a = wrap720(lobe.center - lobe.duration + i);
+      const b = wrap720(a + 1);
+      const la = camLift(a, lobe);
+      const lb = camLift(b, lobe);
+      if (rising && la < thr && lb >= thr) return b;
+      if (!rising && la >= thr && lb < thr) return b;
+    }
+    return lobe.center;
+  };
+  const ivo = at(pair.intake, true);
+  const ivc = at(pair.intake, false);
+  const evo = at(pair.exhaust, true);
+  const evc = at(pair.exhaust, false);
+  let overlap = 0;
+  const thr = 1 / Math.max(1, liftMm);
+  for (let p = 0; p < 720; p++) {
+    if (camLift(p, pair.intake) >= thr && camLift(p, pair.exhaust) >= thr) overlap++;
+  }
+  return { ivo, ivc, evo, evc, overlap };
+}
+
 /**
  * Kam profili: taban dairesi, rampa, yanak ve burun.
  * `d` burundan uzaklık / yarı süre. Rampa son %14'te yumuşak oturur.

@@ -1,4 +1,8 @@
 import type { Simulation } from "./sim";
+import { camCard, redlineRpm } from "./model";
+import { LAYOUTS } from "./model";
+
+type Bus = "exhaust" | "intake" | "mech";
 
 function renderBuffer(
   ctx: AudioContext,
@@ -12,229 +16,338 @@ function renderBuffer(
   return buffer;
 }
 
+type AudioCtor = typeof AudioContext;
+
+function audioCtor(): AudioCtor {
+  const w = window as Window & { webkitAudioContext?: AudioCtor };
+  return window.AudioContext ?? w.webkitAudioContext ?? AudioContext;
+}
+
 /**
- * Devirle yürüyen motor sesi: ateşleme anına kilitli tıklar,
- * gövde osilatörü, turbo ıslığı ve arıza katmanları.
+ * Prosedürel motor sesi. Kayıtlı örnek yok.
+ * Her silindir, krank açısına ve ateşleme sırasına kilitli bir darbe üretir.
+ * Egzoz, emme ve mekanik katmanları ayrı kazançla karışır.
  */
 export class EngineAudio {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  private exhaust: GainNode | null = null;
+  private intake: GainNode | null = null;
+  private mech: GainNode | null = null;
+  private exhaustFilter: BiquadFilterNode | null = null;
+  private exhaustPeak: BiquadFilterNode | null = null;
+  private intakeFilter: BiquadFilterNode | null = null;
   private body: OscillatorNode | null = null;
   private bodyGain: GainNode | null = null;
-  private sub: OscillatorNode | null = null;
-  private subGain: GainNode | null = null;
-  private noiseGain: GainNode | null = null;
-  private noiseFilter: BiquadFilterNode | null = null;
   private turbo: OscillatorNode | null = null;
   private turboGain: GainNode | null = null;
-  private gasClick: AudioBuffer | null = null;
-  private dieselClick: AudioBuffer | null = null;
-  private bang: AudioBuffer | null = null;
+  private howl: OscillatorNode | null = null;
+  private howlGain: GainNode | null = null;
+  private starter: OscillatorNode | null = null;
+  private starterGain: GainNode | null = null;
+  private gas: AudioBuffer | null = null;
+  private diesel: AudioBuffer | null = null;
+  private clatter: AudioBuffer | null = null;
+  private pop: AudioBuffer | null = null;
   private knock: AudioBuffer | null = null;
-  private crackle: AudioBuffer | null = null;
+  private tick: AudioBuffer | null = null;
+  private blow: AudioBuffer | null = null;
+  private chug: AudioBuffer | null = null;
+  private clash: AudioBuffer | null = null;
   private prevCrank = 0;
-  private prevRpm = 0;
+  private prevThrottle = 0.45;
+  private prevBoost = 0;
+  private prevVtec = 0;
+  private howlLeft = 0;
   private knockAcc = 0;
+  private tickAcc = 0;
+  private chugAcc = 0;
+  volume = 0.8;
+  mixExhaust = 0.85;
+  mixIntake = 0.55;
+  mixMech = 0.4;
   muted = false;
   ready = false;
 
   async start(): Promise<void> {
-    if (this.ctx) {
-      if (this.ctx.state === "suspended") await this.ctx.resume();
-      this.ready = true;
-      return;
+    const Ctor = audioCtor();
+    if (!this.ctx) {
+      const ctx = new Ctor();
+      this.ctx = ctx;
+      const master = ctx.createGain();
+      master.gain.value = 0;
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -16;
+      comp.knee.value = 12;
+      comp.ratio.value = 4;
+      comp.attack.value = 0.003;
+      comp.release.value = 0.16;
+      master.connect(comp);
+      comp.connect(ctx.destination);
+      this.master = master;
+
+      const exhaust = ctx.createGain();
+      const exhaustFilter = ctx.createBiquadFilter();
+      exhaustFilter.type = "lowpass";
+      exhaustFilter.frequency.value = 900;
+      const exhaustPeak = ctx.createBiquadFilter();
+      exhaustPeak.type = "peaking";
+      exhaustPeak.Q.value = 3.2;
+      exhaustPeak.gain.value = 5;
+      exhaust.connect(exhaustFilter);
+      exhaustFilter.connect(exhaustPeak);
+      exhaustPeak.connect(master);
+      this.exhaust = exhaust;
+      this.exhaustFilter = exhaustFilter;
+      this.exhaustPeak = exhaustPeak;
+
+      const intake = ctx.createGain();
+      const intakeFilter = ctx.createBiquadFilter();
+      intakeFilter.type = "bandpass";
+      intakeFilter.Q.value = 1.4;
+      intakeFilter.frequency.value = 700;
+      intake.connect(intakeFilter);
+      intakeFilter.connect(master);
+      this.intake = intake;
+      this.intakeFilter = intakeFilter;
+
+      const mech = ctx.createGain();
+      const mechFilter = ctx.createBiquadFilter();
+      mechFilter.type = "highpass";
+      mechFilter.frequency.value = 180;
+      mech.connect(mechFilter);
+      mechFilter.connect(master);
+      this.mech = mech;
+
+      const body = ctx.createOscillator();
+      body.type = "sawtooth";
+      const bodyGain = ctx.createGain();
+      bodyGain.gain.value = 0;
+      const bodyFilter = ctx.createBiquadFilter();
+      bodyFilter.type = "lowpass";
+      bodyFilter.frequency.value = 280;
+      body.connect(bodyFilter);
+      bodyFilter.connect(bodyGain);
+      bodyGain.connect(exhaust);
+      body.start();
+      this.body = body;
+      this.bodyGain = bodyGain;
+
+      const turbo = ctx.createOscillator();
+      turbo.type = "sine";
+      const turboGain = ctx.createGain();
+      turboGain.gain.value = 0;
+      const turboFilter = ctx.createBiquadFilter();
+      turboFilter.type = "bandpass";
+      turboFilter.frequency.value = 2200;
+      turboFilter.Q.value = 8;
+      turbo.connect(turboFilter);
+      turboFilter.connect(turboGain);
+      turboGain.connect(intake);
+      turbo.start();
+      this.turbo = turbo;
+      this.turboGain = turboGain;
+
+      const howl = ctx.createOscillator();
+      howl.type = "sawtooth";
+      const howlGain = ctx.createGain();
+      howlGain.gain.value = 0;
+      const howlFilter = ctx.createBiquadFilter();
+      howlFilter.type = "bandpass";
+      howlFilter.frequency.value = 1400;
+      howlFilter.Q.value = 4;
+      howl.connect(howlFilter);
+      howlFilter.connect(howlGain);
+      howlGain.connect(intake);
+      howl.start();
+      this.howl = howl;
+      this.howlGain = howlGain;
+
+      const starter = ctx.createOscillator();
+      starter.type = "square";
+      starter.frequency.value = 58;
+      const starterGain = ctx.createGain();
+      starterGain.gain.value = 0;
+      starter.connect(starterGain);
+      starterGain.connect(mech);
+      starter.start();
+      this.starter = starter;
+      this.starterGain = starterGain;
+
+      this.gas = renderBuffer(ctx, 0.09, (t) => {
+        const env = Math.exp(-t * 28) * (1 - Math.exp(-t * 400));
+        const tone = Math.sin(Math.PI * 2 * (90 + 40 * Math.exp(-t * 30)) * t);
+        return (tone * 0.65 + (Math.random() * 2 - 1) * 0.35) * env;
+      });
+      this.diesel = renderBuffer(ctx, 0.045, (t) => {
+        const env = Math.exp(-t * 90);
+        return ((Math.random() * 2 - 1) * 0.85 + Math.sin(Math.PI * 2 * 240 * t) * 0.3) * env;
+      });
+      this.clatter = renderBuffer(ctx, 0.02, (t) => (Math.random() * 2 - 1) * Math.exp(-t * 220) * Math.sin(Math.PI * 2 * 1800 * t));
+      this.pop = renderBuffer(ctx, 0.12, (t) => (Math.random() * 2 - 1) * Math.exp(-t * 18) * (0.4 + 0.6 * Math.sin(Math.PI * 2 * 70 * t)));
+      this.knock = renderBuffer(ctx, 0.04, (t) => {
+        const env = Math.exp(-t * 80);
+        return (Math.sin(Math.PI * 2 * 1800 * t) * 0.35 + (Math.random() * 2 - 1) * 0.65) * env;
+      });
+      this.tick = renderBuffer(ctx, 0.012, (t) => Math.sin(Math.PI * 2 * 3200 * t) * Math.exp(-t * 280));
+      this.blow = renderBuffer(ctx, 0.28, (t) => (Math.random() * 2 - 1) * Math.exp(-t * 8) * Math.sin(Math.PI * t * 12));
+      this.chug = renderBuffer(ctx, 0.08, (t) => (Math.sin(Math.PI * 2 * 55 * t) * 0.7 + (Math.random() * 2 - 1) * 0.3) * Math.exp(-t * 22));
+      this.clash = renderBuffer(ctx, 0.2, (t) => {
+        const env = Math.exp(-t * 10);
+        return (Math.sin(Math.PI * 2 * (400 * Math.exp(-t * 6)) * t) + (Math.random() * 2 - 1) * 0.5) * env;
+      });
     }
-    const ctx = new AudioContext();
-    this.ctx = ctx;
-    const master = ctx.createGain();
-    master.gain.value = 0.8;
-    const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -14;
-    comp.knee.value = 16;
-    comp.ratio.value = 3.5;
-    comp.attack.value = 0.004;
-    comp.release.value = 0.18;
-    master.connect(comp);
-    comp.connect(ctx.destination);
-    this.master = master;
-
-    const body = ctx.createOscillator();
-    body.type = "sawtooth";
-    const bodyGain = ctx.createGain();
-    bodyGain.gain.value = 0;
-    const bodyFilter = ctx.createBiquadFilter();
-    bodyFilter.type = "lowpass";
-    bodyFilter.frequency.value = 420;
-    body.connect(bodyFilter);
-    bodyFilter.connect(bodyGain);
-    bodyGain.connect(master);
-    body.start();
-    this.body = body;
-    this.bodyGain = bodyGain;
-
-    const sub = ctx.createOscillator();
-    sub.type = "sine";
-    const subGain = ctx.createGain();
-    subGain.gain.value = 0;
-    sub.connect(subGain);
-    subGain.connect(master);
-    sub.start();
-    this.sub = sub;
-    this.subGain = subGain;
-
-    const seconds = 1;
-    const noiseBuf = renderBuffer(ctx, seconds, () => Math.random() * 2 - 1);
-    const noise = ctx.createBufferSource();
-    noise.buffer = noiseBuf;
-    noise.loop = true;
-    const noiseFilter = ctx.createBiquadFilter();
-    noiseFilter.type = "bandpass";
-    noiseFilter.Q.value = 0.7;
-    noiseFilter.frequency.value = 900;
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.value = 0;
-    noise.connect(noiseFilter);
-    noiseFilter.connect(noiseGain);
-    noiseGain.connect(master);
-    noise.start();
-    this.noiseFilter = noiseFilter;
-    this.noiseGain = noiseGain;
-
-    const turbo = ctx.createOscillator();
-    turbo.type = "sine";
-    const turboFilter = ctx.createBiquadFilter();
-    turboFilter.type = "bandpass";
-    turboFilter.frequency.value = 1800;
-    turboFilter.Q.value = 6;
-    const turboGain = ctx.createGain();
-    turboGain.gain.value = 0;
-    turbo.connect(turboFilter);
-    turboFilter.connect(turboGain);
-    turboGain.connect(master);
-    turbo.start();
-    this.turbo = turbo;
-    this.turboGain = turboGain;
-
-    this.gasClick = renderBuffer(ctx, 0.07, (t) => {
-      const env = Math.exp(-t * 46);
-      return (Math.sin(Math.PI * 2 * 68 * t) * 0.75 + (Math.random() * 2 - 1) * 0.35) * env;
-    });
-    this.dieselClick = renderBuffer(ctx, 0.04, (t) => {
-      const env = Math.exp(-t * 110);
-      return ((Math.random() * 2 - 1) * 0.9 + Math.sin(Math.PI * 2 * 180 * t) * 0.25) * env;
-    });
-    this.bang = renderBuffer(ctx, 0.5, (t) => {
-      const env = Math.exp(-t * 5.5);
-      const freq = 120 * Math.exp(-t * 3.2);
-      return (Math.sin(Math.PI * 2 * freq * t) * 0.8 + (Math.random() * 2 - 1) * 0.55) * env;
-    });
-    this.knock = renderBuffer(ctx, 0.045, (t) => {
-      const env = Math.exp(-t * 70);
-      return (Math.sin(Math.PI * 2 * 2100 * t) * 0.4 + (Math.random() * 2 - 1) * 0.6) * env;
-    });
-    this.crackle = renderBuffer(ctx, 0.06, (t) => (Math.random() * 2 - 1) * Math.exp(-t * 40));
-
-    if (ctx.state === "suspended") await ctx.resume();
-    this.ready = true;
+    if (this.ctx.state === "suspended") await this.ctx.resume();
+    this.ready = this.ctx.state === "running";
   }
 
   update(sim: Simulation): void {
-    if (!this.ctx || !this.master || !this.body || !this.bodyGain || !this.sub || !this.subGain) {
+    if (!this.ctx || !this.master || !this.exhaust || !this.intake || !this.mech || !this.body || !this.bodyGain) {
       sim.events.length = 0;
       this.prevCrank = sim.crankDeg;
       return;
     }
-    const ctx = this.ctx;
-    const now = ctx.currentTime;
-    this.master.gain.setTargetAtTime(this.muted ? 0 : 0.85, now, 0.03);
+    const now = this.ctx.currentTime;
+    const vol = this.muted ? 0 : this.volume;
+    this.master.gain.setTargetAtTime(vol, now, 0.03);
+    this.exhaust.gain.setTargetAtTime(this.mixExhaust, now, 0.04);
+    this.intake.gain.setTargetAtTime(this.mixIntake, now, 0.04);
+    this.mech.gain.setTargetAtTime(this.mixMech, now, 0.04);
 
     for (const event of sim.events) {
-      if (event === "bang" || event === "punch" || event === "grind") this.play(this.bang, event === "punch" ? 0.7 : 1);
-      else if (event === "snap") this.play(this.crackle, 0.8);
-      else if (event === "hiss") this.play(this.crackle, 0.35);
-      else if (event === "vtec") this.play(this.crackle, 0.45);
-      else if (event === "catch") this.play(this.gasClick, 0.7);
+      if (event === "bang" || event === "punch" || event === "grind" || event === "clash") this.play(this.clash, 0.7, now, "mech");
+      else if (event === "snap") this.play(this.tick, 0.5, now, "mech");
+      else if (event === "vtec") this.howlLeft = 0.45;
+      else if (event === "catch") this.play(this.gas, 0.6, now, "exhaust");
     }
     sim.events.length = 0;
 
-    const cyl = Math.max(1, sim.cyls.length);
-    const fireHz = Math.max(0, (sim.rpm * cyl) / 120);
     const diesel = sim.spec.fuel === "dizel";
-    this.body.type = diesel ? "square" : "sawtooth";
-    this.body.frequency.setTargetAtTime(Math.max(18, fireHz), now, 0.04);
-    this.sub.frequency.setTargetAtTime(Math.max(12, fireHz * 0.5), now, 0.05);
-
+    const n = Math.max(1, sim.cyls.length || LAYOUTS[sim.spec.layout].cylinders);
+    const fireHz = Math.max(8, (Math.max(sim.rpm, 0) * n) / 120);
     const cranking = sim.cranking;
-    const alive = sim.rpm > 280 && !sim.seized && !cranking;
-    const load = sim.throttle * 0.75 + 0.25;
+    const alive = sim.rpm > 280 && !sim.seized && !cranking && !sim.noFuel;
+    const load = sim.throttle;
+    const card = camCard(sim.camId);
+    const lumpy = card.advertised >= 272 && sim.rpm < 1400 && alive;
     const vtec = sim.vtecEngaged > 0.55;
-    const bodyAmp = cranking
-      ? 0.11
-      : alive ? Math.min(0.16, (0.03 + sim.rpm / 14000) * load) * (diesel ? 0.7 : 1) * (vtec ? 1.15 : 1) : 0;
-    if (cranking) {
-      this.body.type = "square";
-      this.body.frequency.setTargetAtTime(this.batteryHz(sim), now, 0.03);
-    }
+
+    this.body.type = diesel ? "square" : "sawtooth";
+    this.body.frequency.setTargetAtTime(cranking ? (sim.batteryWeak ? 36 : 58) : Math.max(16, fireHz * (lumpy ? 0.5 : 1)), now, 0.05);
+    const bodyAmp = cranking ? 0.08 : alive ? Math.min(0.12, 0.02 + sim.rpm / 18000) * (0.45 + load * 0.7) * (diesel ? 0.55 : 1) : 0;
     this.bodyGain.gain.setTargetAtTime(bodyAmp, now, 0.05);
-    this.subGain.gain.setTargetAtTime(alive ? bodyAmp * (diesel ? 0.45 : 0.8) : 0, now, 0.05);
-    if (this.noiseGain && this.noiseFilter) {
-      this.noiseGain.gain.setTargetAtTime(cranking ? 0.07 : alive ? 0.03 + sim.throttle * 0.06 : 0, now, 0.05);
-      const base = diesel ? 1400 + sim.rpm * 0.12 : 500 + sim.throttle * 1600 + sim.rpm * 0.08;
-      this.noiseFilter.frequency.setTargetAtTime(cranking ? 220 : base + (vtec ? 700 : 0), now, 0.05);
+
+    if (this.exhaustFilter && this.exhaustPeak) {
+      const cut = 420 + load * 1600 + sim.rpm * 0.12 + (vtec ? 500 : 0) + (lumpy ? -180 : 0);
+      this.exhaustFilter.frequency.setTargetAtTime(Math.max(180, cut), now, 0.05);
+      const helm = 70 + fireHz * (diesel ? 1.4 : 2.1) * (0.7 + load * 0.5);
+      this.exhaustPeak.frequency.setTargetAtTime(Math.max(50, Math.min(900, helm)), now, 0.08);
+    }
+    if (this.intakeFilter) {
+      const howl = 500 + sim.rpm * 0.22 + (vtec ? 900 : 0) + this.howlLeft * 600;
+      this.intakeFilter.frequency.setTargetAtTime(howl, now, 0.05);
     }
 
     if (this.turbo && this.turboGain) {
-      const unstable = sim.turboFail;
-      const wobble = unstable ? Math.sin(sim.time * 47) * 380 + Math.sin(sim.time * 130) * 160 : 0;
-      const freq = 160 + sim.rpm * 0.16 + sim.boost * 1250 + wobble;
-      this.turbo.frequency.setTargetAtTime(Math.max(40, freq), now, 0.03);
-      const whine = sim.spec.aspiration === "turbo" && sim.rpm > 700
-        ? (unstable ? 0.05 + Math.abs(Math.sin(sim.time * 30)) * 0.04 : Math.min(0.1, sim.boost * 0.07))
-        : 0;
-      this.turboGain.gain.setTargetAtTime(alive || unstable ? whine : 0, now, 0.04);
+      const spool = sim.spec.aspiration === "turbo" && (alive || sim.boost > 0.15);
+      const flutter = sim.turboFail ? Math.sin(sim.time * 90) * 400 : 0;
+      this.turbo.frequency.setTargetAtTime(Math.max(80, 280 + sim.rpm * 0.22 + sim.boost * 1600 + flutter), now, 0.04);
+      const whistle = spool ? Math.min(0.12, 0.01 + sim.boost * 0.08) * (vtec ? 0.8 : 1) : 0;
+      this.turboGain.gain.setTargetAtTime(whistle, now, 0.05);
+    }
+    if (this.howl && this.howlGain) {
+      this.howl.frequency.setTargetAtTime(900 + sim.rpm * 0.18, now, 0.05);
+      this.howlLeft = Math.max(0, this.howlLeft - 1 / 60);
+      const howlAmp = (vtec ? 0.03 + load * 0.04 : 0) + this.howlLeft * 0.08;
+      this.howlGain.gain.setTargetAtTime(alive ? howlAmp : 0, now, 0.05);
+    }
+    if (this.starter && this.starterGain) {
+      this.starter.frequency.setTargetAtTime(sim.batteryWeak ? 34 : 62, now, 0.05);
+      this.starterGain.gain.setTargetAtTime(cranking ? 0.12 : 0, now, 0.03);
     }
 
-    const fires = cranking ? [] : sim.firesSince(this.prevCrank);
-    const rate = Math.max(30, sim.rpm * 6);
-    const click = diesel ? this.dieselClick : this.gasClick;
-    const amp = diesel ? 0.55 : 0.38;
-    const thin = sim.rpm > 4500 ? 0.45 : sim.rpm > 2500 ? 0.75 : 1;
+    if (load < this.prevThrottle - 0.18 && this.prevBoost > 0.35) {
+      this.play(this.blow, 0.45, now, "intake");
+    }
+    this.prevThrottle = load;
+    this.prevBoost = sim.boost;
+    if (sim.vtecEngaged > 0.55 && this.prevVtec <= 0.55) this.howlLeft = 0.5;
+    this.prevVtec = sim.vtecEngaged;
+
+    if (cranking) {
+      this.chugAcc += 1 / 60;
+      const gap = sim.batteryWeak ? 0.14 : 0.09;
+      if (this.chugAcc > gap) {
+        this.chugAcc = 0;
+        this.play(this.chug, 0.35, now, "mech");
+      }
+      this.prevCrank = sim.crankDeg;
+      return;
+    }
+
+    const red = redlineRpm(sim.spec);
+    const limited = alive && sim.rpm >= red * 0.995;
+    const fires = sim.firesSince(this.prevCrank);
+    const rate = Math.max(40, sim.rpm * 6);
     let played = 0;
     for (const fire of fires) {
-      if (played > 24) break;
+      if (played > 32) break;
+      const miss = sim.isMisfire(fire.index);
       const when = now + Math.max(0, (fire.atDeg - this.prevCrank) / rate);
-      this.play(click, amp * thin * (0.45 + sim.throttle * 0.7) * (sim.seized ? 0 : 1), when);
+      const gap = 720 / n;
+      const odd = Math.abs((fire.atDeg % 720) - fire.index * gap) > 20 ? 1.15 : 1;
+      const lump = lumpy ? (fire.index % 2 === 0 ? 1.25 : 0.45) : 1;
+      const cut = limited && fire.index % 2 === 0;
+      if (cut || miss) {
+        this.play(this.pop, (miss ? 0.35 : 0.22) * (0.4 + load), when, "exhaust");
+      } else if (alive) {
+        const pulse = diesel ? this.diesel : this.gas;
+        const amp = (diesel ? 0.5 : 0.34) * (0.35 + load * 0.75) * odd * lump * (sim.seized ? 0 : 1);
+        this.play(pulse, amp, when, "exhaust");
+        if (diesel) this.play(this.clatter, 0.28 * (0.6 + load * 0.4), when - 0.002, "mech");
+        if (load < 0.2) this.play(this.pop, 0.05, when, "intake");
+      }
       played++;
     }
     this.prevCrank = sim.crankDeg;
 
-    if (sim.rodStage === 1) {
+    if (sim.rodStage >= 1 || sim.oil < 1) {
       this.knockAcc += 1 / 60;
-      const gap = 0.11 - sim.knock * 0.06;
+      const gap = sim.rodStage >= 1 ? 0.09 : 0.16;
       if (this.knockAcc > gap) {
         this.knockAcc = 0;
-        this.play(this.knock, 0.25 + sim.knock * 0.6);
+        this.play(this.knock, sim.rodStage >= 1 ? 0.35 + sim.knock * 0.4 : 0.12, now, "mech");
       }
     } else this.knockAcc = 0;
 
-    if (sim.spec.fuel === "benzin" && sim.throttle < 0.12 && sim.rpm > 2600 && sim.rpm < this.prevRpm - 8 && Math.random() < 0.18) {
-      this.play(this.crackle, 0.22);
+    const lifter = sim.oil < 1.3 || sim.vtecBlocked || sim.cold;
+    if (lifter && alive) {
+      this.tickAcc += sim.rpm / 120 / 60;
+      if (this.tickAcc > 1) {
+        this.tickAcc = 0;
+        this.play(this.tick, 0.18, now, "mech");
+      }
     }
-    this.prevRpm = sim.rpm;
+    if (sim.spec.timingDrive === "zincir" && alive && (sim.rpm < 1100 || sim.timing)) {
+      if (Math.random() < 0.15) this.play(this.tick, 0.1, now, "mech");
+    }
+    if ((sim.cold && sim.rpm > 900 && sim.rpm < 2200) || sim.scenarioId === "water-pump") {
+      if (Math.random() < 0.08) this.play(this.blow, 0.08, now, "mech");
+    }
+    if (sim.valveWarn && Math.random() < 0.04) this.play(this.clash, 0.25, now, "mech");
   }
 
-  private batteryHz(sim: Simulation): number {
-    return sim.batteryWeak ? 38 : 62;
-  }
-
-  private play(buffer: AudioBuffer | null, gain: number, when = this.ctx?.currentTime ?? 0): void {
-    if (!buffer || !this.ctx || !this.master || gain <= 0.001) return;
+  private play(buffer: AudioBuffer | null, gain: number, when: number, bus: Bus): void {
+    if (!buffer || !this.ctx || gain <= 0.001) return;
+    const dest = bus === "exhaust" ? this.exhaust : bus === "intake" ? this.intake : this.mech;
+    if (!dest) return;
     const src = this.ctx.createBufferSource();
     src.buffer = buffer;
     const g = this.ctx.createGain();
     g.gain.value = gain;
     src.connect(g);
-    g.connect(this.master);
-    src.start(when);
+    g.connect(dest);
+    const t = Math.max(this.ctx.currentTime, when);
+    try { src.start(t); } catch { /* zaman geride kaldı */ }
   }
 }
