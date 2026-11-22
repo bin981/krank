@@ -9,7 +9,8 @@ import {
   displacementCc,
   engineTitle,
   phaseDeg,
-  valveLift01,
+  camLift,
+  lobesFor,
   nf0,
   nf1,
   type Dims,
@@ -121,6 +122,7 @@ export class EngineAssembly {
   private fireLocal = new THREE.Vector3();
   private fireStrength = 0;
   hoverName = "";
+  private vtecPin: THREE.Mesh | null = null;
 
   constructor(spec: EngineSpec) {
     this.spec = spec;
@@ -191,8 +193,9 @@ export class EngineAssembly {
 
     for (const cyl of this.cyls) {
       const phase = phaseDeg(sim.crankDeg, cyl.geom.fireDeg);
-      const liftIn = timingCrash ? 1 : valveLift01(phase, 450, 248);
-      const liftEx = timingCrash ? 1 : valveLift01(phase, 270, 236);
+      const lobes = lobesFor(sim.spec, sim.vtecEngaged > 0.55);
+      const liftIn = timingCrash ? 1 : camLift(phase, lobes.intake);
+      const liftEx = timingCrash ? 1 : camLift(phase, lobes.exhaust);
       const travel = timingCrash ? dims.crashLift : dims.maxLift;
       const faceIn = dims.deck - travel * liftIn;
       const faceEx = dims.deck - travel * liftEx;
@@ -271,6 +274,13 @@ export class EngineAssembly {
     fireLight.color.set(sim.spec.fuel === "dizel" ? 0xffa24a : 0xff6a2a);
 
     const heat = Math.min(1, sim.throttle * 0.75 + sim.rpm / 9000);
+    if (this.vtecPin) {
+      const t = sim.vtecEngaged;
+      this.vtecPin.position.z = this.dims.bore * (0.02 + t * 0.16);
+      const mat = this.vtecPin.material as THREE.MeshStandardMaterial;
+      mat.emissive.set(t > 0.6 ? 0x9dff2a : 0x000000);
+      mat.emissiveIntensity = t > 0.6 ? 0.8 : 0;
+    }
     this.exhaustMat.emissiveIntensity = heat * 0.85;
     this.turboMat.emissiveIntensity = sim.turboFail ? 0.2 : heat * 0.55;
     this.gasketMat.emissiveIntensity = sim.gasket ? 0.65 + Math.sin(sim.time * 9) * 0.35 : 0;
@@ -436,9 +446,14 @@ export class EngineAssembly {
 
       this.addBolts(head, list, dims, exhaustSign, lowerH);
 
-      const intakeCam = this.buildCam(list, dims, -exhaustSign, steelDark, head, q, "Emme eksantrik mili");
-      const exhaustCam = this.buildCam(list, dims, exhaustSign, steelDark, head, q, "Egzoz eksantrik mili");
-      bank.cams.push(intakeCam, exhaustCam);
+      if (spec.valvetrain === "sohc8") {
+        const cam = this.buildCam(list, dims, 0, steelDark, head, q, "Eksantrik mili");
+        bank.cams.push(cam);
+      } else {
+        const intakeCam = this.buildCam(list, dims, -exhaustSign, steelDark, head, q, "Emme eksantrik mili");
+        const exhaustCam = this.buildCam(list, dims, exhaustSign, steelDark, head, q, "Egzoz eksantrik mili");
+        bank.cams.push(intakeCam, exhaustCam);
+      }
 
       this.buildManifold(head, list, dims, exhaustSign, true, this.exhaustMat);
       this.buildManifold(head, list, dims, exhaustSign, false, intakeMat);
@@ -488,6 +503,27 @@ export class EngineAssembly {
     const intake = this.makeValve(dims, steel, steelDark);
     intake.position.set(geom.x, dims.deck, -ez);
     intake.userData.part = "Emme supabı";
+    const bucket = new THREE.Mesh(
+      this.track(new THREE.CylinderGeometry(dims.bore * 0.09, dims.bore * 0.09, dims.bore * 0.055, 10)),
+      this.metal(0xb7bdc4, 0.22, "steel"),
+    );
+    bucket.position.y = dims.headH * 0.62;
+    bucket.userData.part = spec.valvetrain === "sohc8" ? "Piyano" : "Kovana";
+    intake.add(bucket);
+    if (spec.valvetrain === "dohc16-vtec" && geom.index === 0) {
+      const pinMat = this.trackMat(new THREE.MeshStandardMaterial({
+        color: 0xd6ff4a,
+        metalness: 0.55,
+        roughness: 0.32,
+        emissive: new THREE.Color(0x000000),
+      }));
+      const pin = new THREE.Mesh(this.track(new THREE.CylinderGeometry(2.1, 2.1, dims.bore * 0.2, 8)), pinMat);
+      pin.rotation.z = Math.PI / 2;
+      pin.position.set(0, dims.headH * 0.62, dims.bore * 0.02);
+      pin.userData.part = "VTEC pimi";
+      intake.add(pin);
+      this.vtecPin = pin;
+    }
     bank.pivot.add(intake);
     const exhaust = this.makeValve(dims, steel, this.metal(0xc08a62, 0.35));
     exhaust.position.set(geom.x, dims.deck, ez);
@@ -634,14 +670,18 @@ export class EngineAssembly {
     shaft.position.x = mid;
     shaft.userData.part = part;
     cam.add(shaft);
-    const lobeGeo = this.track(new THREE.SphereGeometry(dims.bore * 0.13, 12, 8));
-    lobeGeo.scale(1, 1.55, 0.82);
+    const lobeGeo = this.track(camLobeGeometry(dims.bore * 0.16, dims.bore * 0.11));
+    const centers = sign === 0 ? [450, 270] : [sign > 0 ? 270 : 450];
     for (const c of list) {
-      const center = sign > 0 ? 270 : 450;
-      const phi = Math.PI - ((c.fireDeg + center) * Math.PI) / 360;
-      const lobe = new THREE.Mesh(lobeGeo, mat);
-      lobe.position.set(c.x, Math.cos(phi) * dims.bore * 0.12, Math.sin(phi) * dims.bore * 0.12);
-      cam.add(lobe);
+      centers.forEach((center, i) => {
+        const phi = ((c.fireDeg + center) * Math.PI) / 360;
+        const lobe = new THREE.Mesh(lobeGeo, mat);
+        lobe.position.set(c.x + (centers.length > 1 ? (i === 0 ? -1 : 1) * dims.bore * 0.16 : 0), 0, 0);
+        lobe.rotation.x = phi;
+        lobe.castShadow = true;
+        lobe.userData.part = center === 270 ? "Egzoz kam lobu" : "Emme kam lobu";
+        cam.add(lobe);
+      });
     }
     const pulley = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.28, dims.bore * 0.28, 8, 20)), mat);
     pulley.rotation.z = Math.PI / 2;
@@ -1291,6 +1331,24 @@ function preferLite(): boolean {
   const cores = navigator.hardwareConcurrency ?? 8;
   const lowMemory = typeof nav.deviceMemory === "number" && nav.deviceMemory <= 4;
   return (lowMemory && (coarse || cores <= 4)) || (coarse && cores <= 4);
+}
+
+function camLobeGeometry(radius: number, thick: number): THREE.BufferGeometry {
+  const shape = new THREE.Shape();
+  const steps = 22;
+  for (let i = 0; i <= steps; i++) {
+    const a = (i / steps) * Math.PI * 2;
+    const nose = Math.pow(Math.max(0, Math.cos(a)), 2.4);
+    const rad = radius * (1 + nose * 0.95);
+    const y = Math.cos(a) * rad;
+    const z = Math.sin(a) * radius * (0.92 + nose * 0.15);
+    if (i === 0) shape.moveTo(z, y);
+    else shape.lineTo(z, y);
+  }
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: thick, bevelEnabled: true, bevelThickness: 0.6, bevelSize: 0.5, bevelSegments: 1, curveSegments: 1 });
+  geo.translate(0, 0, -thick / 2);
+  geo.rotateY(Math.PI / 2);
+  return geo;
 }
 
 function crankWebGeometry(radius: number, thick: number, steps: number): THREE.BufferGeometry {

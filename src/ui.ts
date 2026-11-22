@@ -5,6 +5,7 @@ import {
   type LayoutId,
   LAYOUTS,
   PRESETS,
+  presetByName,
   displacementCc,
   engineTitle,
   firingOrderLabel,
@@ -12,6 +13,10 @@ import {
   cylinderPressureBar,
   strokeOf,
   phaseDeg,
+  lobesFor,
+  camLift,
+  valvetrainLabel,
+  injectionLabel,
   nf0,
   nf1,
 } from "./engine/model";
@@ -38,7 +43,7 @@ export class Hud {
     private readonly onReset: () => void,
     private readonly onSound: () => void,
   ) {
-    this.spec = { ...PRESETS[2].spec };
+    this.spec = presetByName("2.0 Turbo");
     this.bind();
     this.paintSpec();
     this.buildCyls();
@@ -145,6 +150,8 @@ export class Hud {
 
     this.paintCyls(sim);
     this.paintGraph(sim);
+    this.paintValves(sim);
+    this.paintSpecCard();
     const turboBtn = document.querySelector("#fail-turbo") as HTMLButtonElement;
     turboBtn.disabled = sim.spec.aspiration !== "turbo" || sim.turboFail;
   }
@@ -180,6 +187,7 @@ export class Hud {
           return;
         }
         this.mark(btn.parentElement as HTMLElement, btn);
+        this.genericize();
         if (group === "fuel") this.spec.fuel = btn.dataset.value as Fuel;
         if (group === "aspiration") this.spec.aspiration = btn.dataset.value as Aspiration;
         if (group === "layout") this.spec.layout = btn.dataset.value as LayoutId;
@@ -246,7 +254,8 @@ export class Hud {
       const btn = (ev.target as HTMLElement).closest("button");
       if (!btn?.dataset.sheet) return;
       const name = btn.dataset.sheet;
-      const open = document.body.dataset.sheet === name ? "" : name;
+      const sheet = name === "bay" ? "motor" : name;
+      const open = document.body.dataset.sheet === sheet && name !== "bay" ? "" : sheet;
       document.body.dataset.sheet = open;
       document.body.classList.toggle("sheet-motor", open === "motor");
       document.body.classList.toggle("sheet-drive", open === "drive");
@@ -324,7 +333,19 @@ export class Hud {
     this.onSpec({ ...this.spec });
   }
 
+  private genericize(): void {
+    delete this.spec.presetId;
+    delete this.spec.code;
+    delete this.spec.redline;
+    delete this.spec.vtecRpm;
+    delete this.spec.note;
+    delete this.spec.valvetrain;
+    delete this.spec.injection;
+    delete this.spec.timingDrive;
+  }
+
   private readDims(): void {
+    this.genericize();
     this.spec.bore = num("bore");
     this.spec.stroke = num("stroke");
     this.spec.compression = num("cr");
@@ -368,6 +389,77 @@ export class Hud {
       const p = PRESETS.find((x) => x.name === b.dataset.name);
       b.classList.toggle("on", !!p && sameSpec(p.spec, this.spec));
     });
+  }
+
+  private paintSpecCard(): void {
+    const card = document.querySelector("#spec-card");
+    if (!card) return;
+    const spec = this.spec;
+    const cc = displacementCc(spec);
+    const rows: [string, string][] = [
+      ["Hacim", `${nf0.format(cc)} cc`],
+      ["Düzen", `${LAYOUTS[spec.layout].label}`],
+      ["Çap × strok", `${nf1.format(spec.bore)} × ${nf1.format(spec.stroke)}`],
+      ["Sıkıştırma", `${nf1.format(spec.compression)} : 1`],
+      ["Ateşleme", firingOrderLabel(spec.layout)],
+      ["Supap", valvetrainLabel(spec)],
+      ["Enjeksiyon", injectionLabel(spec)],
+      ["Triger", spec.timingDrive === "zincir" ? "Zincir" : spec.timingDrive === "kayış" ? "Kayış" : "Kayış"],
+      ["Kırmızı bölge", `${nf0.format(redlineRpm(spec))} dev/dk`],
+    ];
+    if (spec.vtecRpm) rows.push(["VTEC", `${nf0.format(spec.vtecRpm)} dev/dk`]);
+    card.innerHTML = `<h3>${spec.code ?? engineTitle(spec)}</h3><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>${spec.note ? `<p>${spec.note}</p>` : ""}`;
+  }
+
+  private paintValves(sim: Simulation): void {
+    const canvas = document.querySelector("#vlift") as HTMLCanvasElement | null;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = canvas.clientWidth || 320;
+    const h = canvas.clientHeight || 110;
+    if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const lobes = lobesFor(sim.spec, sim.vtecEngaged > 0.55);
+    const samples = 180;
+    const intake: number[] = [];
+    const exhaust: number[] = [];
+    for (let i = 0; i < samples; i++) {
+      const phase = (i / (samples - 1)) * 720;
+      intake.push(camLift(phase, lobes.intake));
+      exhaust.push(camLift(phase, lobes.exhaust));
+    }
+    ctx.fillStyle = "rgba(226,255,77,0.08)";
+    for (let i = 0; i < samples; i++) {
+      if (intake[i] > 0.05 && exhaust[i] > 0.05) {
+        const x = (i / (samples - 1)) * w;
+        ctx.fillRect(x, 0, w / samples + 1, h);
+      }
+    }
+    const draw = (values: number[], color: string) => {
+      ctx.beginPath();
+      values.forEach((v, i) => {
+        const x = (i / (samples - 1)) * w;
+        const y = h - 8 - v * (h - 18);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+    };
+    draw(exhaust, "#c7b6a2");
+    draw(intake, "#7eb6ff");
+    const phase = phaseDeg(sim.crankDeg, sim.cyls[0]?.fireDeg ?? 0);
+    ctx.strokeStyle = "#ff4d1c";
+    ctx.beginPath();
+    ctx.moveTo((phase / 720) * w, 0);
+    ctx.lineTo((phase / 720) * w, h);
+    ctx.stroke();
   }
 
   private paintNumbers(): void {
@@ -542,6 +634,7 @@ const PARTS: Record<string, string> = {
 };
 
 function sameSpec(a: EngineSpec, b: EngineSpec): boolean {
+  if (a.presetId || b.presetId) return a.presetId === b.presetId;
   return a.fuel === b.fuel && a.aspiration === b.aspiration && a.layout === b.layout
     && Math.abs(a.bore - b.bore) < 0.2 && Math.abs(a.stroke - b.stroke) < 0.2
     && Math.abs(a.compression - b.compression) < 0.15 && Math.abs(a.boostTarget - b.boostTarget) < 0.06;

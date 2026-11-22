@@ -269,6 +269,115 @@ body.shorts #frame {
   box-shadow: 0 0 0 100vmax #000;
 }
 
+.tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.tabs button {
+  flex: 1;
+  border-radius: 999px;
+  border: 1px solid #34392c;
+  background: #151910;
+  padding: 7px 8px;
+}
+.tabs button.on { background: var(--acid); color: #14160c; border-color: var(--acid); }
+.spec-card {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+.spec-card h3 { margin: 0 0 6px; font-family: Oswald, sans-serif; font-weight: 500; letter-spacing: 0.04em; }
+.spec-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin: 0; }
+.spec-card dt { color: var(--muted); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+.spec-card dd { margin: 0 0 6px; font-size: 13px; }
+.spec-card p { margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
+#vlift { width: 100%; height: 110px; display: block; background: #0c0e0a; border: 1px solid #2a2e24; border-radius: 8px; }
+.key { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.key button { border-radius: 12px; border: 1px solid #34392c; background: #151910; min-height: 44px; }
+.key button.on { background: var(--acid); color: #14160c; border-color: var(--acid); }
+.glow-lamp {
+  margin: 8px 0;
+  color: #ffb020;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+.bay-scene {
+  position: relative;
+  height: 210px;
+  margin: 10px 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 70% 40%, rgba(226, 255, 77, 0.08), transparent 46%),
+    linear-gradient(180deg, #1a1e18, #10140f);
+  border: 1px solid var(--line);
+  touch-action: none;
+}
+.bay-engine {
+  position: absolute;
+  right: 16px;
+  top: 36px;
+  width: 46%;
+  height: 120px;
+  border-radius: 18px 40px 16px 16px;
+  background: linear-gradient(160deg, #3a4038, #232820 60%, #151814);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.04);
+}
+.battery {
+  position: absolute;
+  left: 18px;
+  top: 48px;
+  width: 118px;
+  height: 78px;
+  border-radius: 10px;
+  background: #1c1f24;
+  border: 1px solid #4a5248;
+  display: grid;
+  place-items: end center;
+  padding-bottom: 8px;
+  color: var(--muted);
+  letter-spacing: 0.14em;
+  font-size: 11px;
+}
+.battery.out { opacity: 0.35; transform: translate(70px, -28px) rotate(-8deg); }
+.hold, .cap {
+  position: absolute;
+  touch-action: none;
+}
+.hold {
+  left: 8px;
+  right: 8px;
+  top: -14px;
+  height: 16px;
+  border-radius: 6px;
+  background: #8a9298;
+  color: #14160c;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  display: grid;
+  place-items: center;
+}
+.hold.off { background: transparent; color: var(--muted); border: 1px dashed #555; }
+.cap {
+  top: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 0;
+  font-weight: 700;
+}
+.cap.pos { right: 8px; background: #e24b3a; color: white; }
+.cap.neg { left: 8px; background: #2a2e28; color: var(--ink); border: 1px solid #666; }
+.cap.off { transform: translateY(-26px); opacity: 0.7; }
+.meter { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.meter strong { font-family: Oswald, sans-serif; font-size: 28px; min-width: 92px; }
+.lesson { margin: 10px 0 14px; }
+.lesson h3 { margin: 0 0 6px; font-size: 16px; }
+.lesson ol { margin: 0; padding-left: 18px; }
+.lesson li { margin: 3px 0; color: var(--muted); }
+.lesson li.done { color: var(--ok); text-decoration: line-through; }
+.lesson li.now { color: var(--acid); }
+
 .part-label {
   color: #f4f1e6;
   font-size: 11px;
@@ -366,7 +475,7 @@ body.shorts #frame {
   #tour-card { top: calc(64px + env(safe-area-inset-top)); }
   #dock {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(4, 1fr);
     gap: 8px;
     position: fixed;
     z-index: 7;
@@ -383,8 +492,9 @@ body.shorts #frame {
     background: #161910;
     color: var(--ink);
     font-family: Oswald, sans-serif;
-    letter-spacing: 0.08em;
-    font-size: 16px;
+    letter-spacing: 0.04em;
+    font-size: 13px;
+    padding: 6px 4px;
   }
   #dock button.on { background: var(--acid); color: #14160c; border-color: var(--acid); }
   .seg button, .chips button, .fails button, .ghost, .accent, .run, .danger, #dock button {

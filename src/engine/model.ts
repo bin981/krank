@@ -1,6 +1,9 @@
 export type Fuel = "benzin" | "dizel";
 export type Aspiration = "atmosferik" | "turbo";
 export type LayoutId = "i3" | "i4" | "i6" | "v6" | "v8";
+export type Valvetrain = "sohc8" | "dohc16" | "dohc16-vtec";
+export type Injection = "port" | "common-rail" | "manifold";
+export type TimingDrive = "kayış" | "zincir";
 
 export interface EngineSpec {
   fuel: Fuel;
@@ -13,6 +16,17 @@ export interface EngineSpec {
   compression: number;
   /** Hedef turbo basıncı, bar (gösterge). Atmosferikte yok sayılır. */
   boostTarget: number;
+  /** Katalog kodu, örn. 1ND-TV. */
+  code?: string;
+  presetId?: string;
+  valvetrain?: Valvetrain;
+  injection?: Injection;
+  timingDrive?: TimingDrive;
+  /** Katalog kırmızı bölge. Yoksa motordan türetilir. */
+  redline?: number;
+  /** VTEC piminin kilitlendiği devir. */
+  vtecRpm?: number;
+  note?: string;
 }
 
 export interface LayoutDef {
@@ -97,6 +111,68 @@ export interface Preset {
 }
 
 export const PRESETS: Preset[] = [
+  {
+    name: "1.4 D-4D",
+    blurb: "Toyota 1ND-TV, common-rail dizel",
+    spec: {
+      fuel: "dizel",
+      aspiration: "turbo",
+      layout: "i4",
+      bore: 73,
+      stroke: 81.5,
+      compression: 17.9,
+      boostTarget: 1.15,
+      code: "1ND-TV",
+      presetId: "1nd-tv",
+      valvetrain: "sohc8",
+      injection: "common-rail",
+      timingDrive: "zincir",
+      redline: 5000,
+      note: "1364 cc, VGT turbo, kızdırma bujili SOHC 8V. Ateşleme 1-3-4-2.",
+    },
+  },
+  {
+    name: "B16 VTEC",
+    blurb: "Honda B16A, DOHC VTEC",
+    spec: {
+      fuel: "benzin",
+      aspiration: "atmosferik",
+      layout: "i4",
+      bore: 81,
+      stroke: 77.4,
+      compression: 10.4,
+      boostTarget: 0.4,
+      code: "B16A",
+      presetId: "b16a",
+      valvetrain: "dohc16-vtec",
+      injection: "port",
+      timingDrive: "kayış",
+      redline: 8000,
+      vtecRpm: 5500,
+      note: "1595 cc, 16V. Düşük kam rölantide, yüksek kam ~5500 dev/dk'da kilitlenir.",
+    },
+  },
+  {
+    name: "B18 VTEC",
+    blurb: "Honda B18C, yüksek devir VTEC",
+    spec: {
+      fuel: "benzin",
+      aspiration: "atmosferik",
+      layout: "i4",
+      bore: 81,
+      stroke: 87.2,
+      compression: 11.1,
+      boostTarget: 0.4,
+      code: "B18C",
+      presetId: "b18c",
+      valvetrain: "dohc16-vtec",
+      injection: "port",
+      timingDrive: "kayış",
+      redline: 8400,
+      vtecRpm: 5800,
+      note: "1797 cc. Type R ölçeğinde sıkıştırma ve 8400 kırmızı bölge.",
+    },
+  },
   {
     name: "1.0 Sıra-3",
     blurb: "Küçük turbo benzin",
@@ -296,6 +372,7 @@ export function displacementCc(spec: Pick<EngineSpec, "bore" | "stroke" | "layou
 }
 
 export function redlineRpm(spec: EngineSpec): number {
+  if (spec.redline) return spec.redline;
   if (spec.fuel === "dizel") return spec.layout === "v8" ? 4200 : 4800;
   if (spec.layout === "i6") return 7800;
   if (spec.layout === "v8") return 6800;
@@ -315,7 +392,13 @@ export interface PowerEstimate {
 }
 
 /** Basit ama ölçek olarak tanıdık bir BMEP modeli. Gaz kelebeği ve boost yükü belirler. */
-export function estimatePower(spec: EngineSpec, rpm: number, throttle: number, boostBar: number): PowerEstimate {
+export function estimatePower(
+  spec: EngineSpec,
+  rpm: number,
+  throttle: number,
+  boostBar: number,
+  vtecHigh = false,
+): PowerEstimate {
   const liters = displacementCc(spec) / 1000;
   const red = redlineRpm(spec);
   const peakRpm = peakTorqueRpm(spec);
@@ -328,11 +411,19 @@ export function estimatePower(spec: EngineSpec, rpm: number, throttle: number, b
     bmep *= 1.12;
   }
   const load = spec.fuel === "dizel" ? 0.16 + 0.84 * throttle : 0.1 + 0.9 * throttle;
+  const vtec = spec.valvetrain === "dohc16-vtec";
+  const switchRpm = spec.vtecRpm ?? 5500;
   let shape: number;
   if (rpm <= peakRpm) shape = Math.sin((rpm / Math.max(1, peakRpm)) * Math.PI * 0.5);
   else {
     const t = clamp((rpm - peakRpm) / Math.max(1, red - peakRpm), 0, 1.4);
     shape = Math.max(0.08, 1 - t * (spec.fuel === "dizel" ? 0.62 : 0.4));
+  }
+  if (vtec && vtecHigh) {
+    bmep *= 1.16;
+    if (rpm >= switchRpm) shape = Math.max(shape, 0.9 - (rpm - switchRpm) / Math.max(800, red - switchRpm) * 0.18);
+  } else if (vtec && rpm > switchRpm - 700) {
+    shape *= 0.78;
   }
   const bmepPa = bmep * 1e5 * load * shape;
   const vd = liters / 1000;
@@ -377,6 +468,78 @@ export function strokeOf(phaseDeg: number, fuel: Fuel): { id: StrokeId; label: s
   return { id: "compression", label: "Sıkıştırma" };
 }
 
+export interface LobeSpec {
+  /** Maksimum kalkışın krank açısı, 0..720. */
+  center: number;
+  /** 0.05 kalkıştaki süre, krank derecesi. */
+  duration: number;
+  /** Tepe kalkış, 0..1. */
+  peak: number;
+}
+
+export interface CamPair {
+  intake: LobeSpec;
+  exhaust: LobeSpec;
+  high: boolean;
+  label: string;
+}
+
+const CAMS = {
+  diesel: {
+    intake: { center: 470, duration: 206, peak: 0.78 },
+    exhaust: { center: 248, duration: 214, peak: 0.8 },
+    high: false,
+    label: "SOHC dizel",
+  },
+  gas: {
+    intake: { center: 450, duration: 248, peak: 0.9 },
+    exhaust: { center: 270, duration: 236, peak: 0.88 },
+    high: false,
+    label: "DOHC",
+  },
+  vtecLow: {
+    intake: { center: 462, duration: 222, peak: 0.7 },
+    exhaust: { center: 278, duration: 214, peak: 0.68 },
+    high: false,
+    label: "VTEC düşük kam",
+  },
+  vtecHigh: {
+    intake: { center: 438, duration: 302, peak: 1 },
+    exhaust: { center: 292, duration: 294, peak: 0.98 },
+    high: true,
+    label: "VTEC yüksek kam",
+  },
+} satisfies Record<string, CamPair>;
+
+export function lobesFor(spec: EngineSpec, high: boolean): CamPair {
+  if (spec.valvetrain === "dohc16-vtec") return high ? CAMS.vtecHigh : CAMS.vtecLow;
+  if (spec.valvetrain === "sohc8" || spec.fuel === "dizel") return CAMS.diesel;
+  return CAMS.gas;
+}
+
+/**
+ * Kam profili: taban dairesi, rampa, yanak ve burun.
+ * `d` burundan uzaklık / yarı süre. Rampa son %14'te yumuşak oturur.
+ */
+export function camLift(phase: number, lobe: LobeSpec): number {
+  const wrapped = wrap720(phase);
+  let d = Math.abs(wrapped - lobe.center);
+  d = Math.min(d, 720 - d);
+  const half = lobe.duration / 2;
+  if (d >= half) return 0;
+  const x = d / half;
+  const ramp = 0.14;
+  let shape: number;
+  if (x > 1 - ramp) {
+    const t = (1 - x) / ramp;
+    shape = t * t * 0.1;
+  } else {
+    const flank = x / (1 - ramp);
+    shape = Math.cos(flank * Math.PI * 0.5) ** 1.05;
+  }
+  return shape * lobe.peak;
+}
+
 export function valveLift01(phaseDeg: number, center: number, openWidth: number): number {
   const phase = wrap720(phaseDeg);
   let d = Math.abs(phase - center);
@@ -405,6 +568,7 @@ export function smoothstep(edge0: number, edge1: number, x: number): number {
 }
 
 export function engineTitle(spec: EngineSpec): string {
+  if (spec.code) return spec.code;
   const liters = displacementCc(spec) / 1000;
   const L = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(liters);
   const fuel = spec.fuel === "dizel" ? "Dizel" : "Benzin";
@@ -414,6 +578,25 @@ export function engineTitle(spec: EngineSpec): string {
 
 export function firingOrderLabel(layout: LayoutId): string {
   return LAYOUTS[layout].firingOrder.join(" – ");
+}
+
+export function valvetrainLabel(spec: EngineSpec): string {
+  if (spec.valvetrain === "sohc8") return "SOHC 8V";
+  if (spec.valvetrain === "dohc16-vtec") return "DOHC VTEC 16V";
+  if (spec.valvetrain === "dohc16") return "DOHC 16V";
+  return spec.fuel === "dizel" ? "SOHC 8V" : "DOHC 16V";
+}
+
+export function injectionLabel(spec: EngineSpec): string {
+  if (spec.injection === "common-rail") return "Common-rail";
+  if (spec.injection === "port") return "Port enjeksiyon";
+  if (spec.injection === "manifold") return "Manifold enjeksiyon";
+  return spec.fuel === "dizel" ? "Common-rail" : "Port enjeksiyon";
+}
+
+export function presetByName(name: string): EngineSpec {
+  const found = PRESETS.find((p) => p.name === name) ?? PRESETS.find((p) => p.name === "2.0 Turbo") ?? PRESETS[0];
+  return { ...found.spec };
 }
 
 export const nf0 = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });

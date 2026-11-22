@@ -64,9 +64,16 @@
       </div>
 
       <aside id="left" class="panel">
+        <div class="tabs" id="left-tabs">
+          <button type="button" data-tab="build" class="on">Motor</button>
+          <button type="button" data-tab="bay">Atölye</button>
+          <button type="button" data-tab="lesson">Ders</button>
+        </div>
+        <div id="tab-build">
         <p class="kicker">Yapılandırma</p>
         <h2>Motoru kur</h2>
         <div id="presets" class="chips"></div>
+        <article id="spec-card" class="spec-card"></article>
 
         <fieldset>
           <legend>Yakıt</legend>
@@ -113,6 +120,41 @@
         </label>
         <label class="check"><input id="radiator" type="checkbox" /> Radyatör tıkalı</label>
         <p class="hint">Yüksek devir, aşırı basınç, hararet veya düşük yağ ilgili arızayı kendiliğinden başlatır.</p>
+        </div>
+        <div id="tab-bay" hidden>
+          <p class="kicker">Atölye</p>
+          <h2>Motor bölmesi</h2>
+          <div id="key" class="key" role="group" aria-label="Kontak">
+            <button type="button" data-key="off">OFF</button>
+            <button type="button" data-key="acc">ACC</button>
+            <button type="button" data-key="on">ON</button>
+            <button type="button" data-key="start">START</button>
+          </div>
+          <p id="glow-lamp" class="glow-lamp" hidden>Kızdırma</p>
+          <div id="bay-scene" class="bay-scene">
+            <div class="bay-engine" aria-hidden="true"></div>
+            <div id="battery" class="battery" data-drag="battery">
+              <div id="hold" class="hold" data-drag="hold">Kelepçe</div>
+              <button type="button" id="cap-pos" class="cap pos" data-drag="pos">+</button>
+              <button type="button" id="cap-neg" class="cap neg" data-drag="neg">−</button>
+              <span>AKÜ</span>
+            </div>
+          </div>
+          <p class="hint">Sökme: önce −, sonra +. Takma: önce +, en son −. Kutbu sürükle veya dokun.</p>
+          <div class="meter">
+            <strong id="meter-v">12,6 V</strong>
+            <button type="button" id="probe-pos">Kırmızı uç: +</button>
+            <button type="button" id="probe-neg">Siyah uç: −</button>
+          </div>
+          <label class="check"><input id="weak-bat" type="checkbox" /> Zayıf akü</label>
+          <p id="bay-msg" class="status ok"></p>
+        </div>
+        <div id="tab-lesson" hidden>
+          <p class="kicker">Görev</p>
+          <h2>Dersler</h2>
+          <p id="lesson-score" class="disp">Puan 0/0</p>
+          <div id="lessons"></div>
+        </div>
       </aside>
 
       <aside id="right" class="panel">
@@ -135,6 +177,9 @@
           <div><em>Yağ</em><strong id="oil-read">3,0 bar</strong></div>
           <div><em>Hararet</em><strong id="temp">90 °C</strong></div>
         </div>
+        <p class="kicker">Supap kalkışı <span id="vtec-state"></span></p>
+        <canvas id="vlift" width="520" height="140"></canvas>
+        <button type="button" id="vtec-watch" class="ghost" hidden aria-pressed="false">VTEC yüksek kam</button>
         <p class="kicker">Silindir basıncı <span id="graph-cyl">Silindir 1</span></p>
         <canvas id="graph" width="520" height="180"></canvas>
         <p id="peak" class="hint">Tepe basınç grafikte.</p>
@@ -195,6 +240,7 @@
       <button type="button" data-sheet="motor">Motor</button>
       <button type="button" data-sheet="drive">Sürüş</button>
       <button type="button" data-sheet="data">Veri</button>
+      <button type="button" data-sheet="bay">Atölye</button>
     </nav>
     <div id="boot-error" hidden role="alert">
       <div class="boot-card">

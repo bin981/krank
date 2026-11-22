@@ -10,6 +10,7 @@ import { EngineAudio } from "./engine/audio";
 import { EngineAssembly } from "./scene/engine";
 import { Studio } from "./scene/studio";
 import { Hud } from "./ui";
+import { Workshop } from "./workshop";
 
 const WEBGL_MESSAGE =
   "Bu tarayıcı WebGL ile üç boyutlu görüntü üretemiyor. Donanım hızlandırmasını açıp sayfayı yenileyin, veya güncel bir Chrome, Firefox ya da Safari deneyin. Mobilde düşük güç modu ve eski ekran kartı sürücüleri de sahneyi boş bırakabilir.";
@@ -56,6 +57,8 @@ try {
 
 const sim = new Simulation();
 const audio = new EngineAudio();
+
+const workshop = new Workshop(sim);
 
 const hud = new Hud(
   (spec) => applySpec(spec),
@@ -108,7 +111,8 @@ function loop(now: number): void {
     const view = hud.view();
     if (view && hud.shortsOn !== studio.shorts) studio.setShorts(hud.shortsOn);
     sim.throttle = hud.throttle;
-    if (!sim.seized && !sim.heatSeize && sim.rodStage < 2) sim.targetRpm = hud.rpm;
+    sim.requestedRpm = hud.rpm;
+    if (!sim.workshop && !sim.seized && !sim.heatSeize && sim.rodStage < 2) sim.targetRpm = hud.rpm;
     sim.oilLevel = hud.oilLevel;
     sim.radiatorBlocked = hud.radiatorBlocked;
     sim.spec.boostTarget = hud.spec.boostTarget;
@@ -116,6 +120,7 @@ function loop(now: number): void {
     studio.update(sim, view, dt);
     audio.update(sim);
     hud.sync(sim, studio.hover);
+    workshop.sync();
   } catch (err) {
     alive = false;
     console.error(err);

@@ -1,7 +1,7 @@
 import {
   type EngineSpec,
   type CylGeom,
-  PRESETS,
+  presetByName,
   buildCylinders,
   computeDims,
   redlineRpm,
@@ -11,9 +11,10 @@ import {
 } from "./model";
 
 export type FailId = "rod" | "gasket" | "turbo" | "timing" | "seizure";
+export type KeyPos = "off" | "acc" | "on" | "start";
 
 export class Simulation {
-  spec: EngineSpec = { ...PRESETS[2].spec };
+  spec: EngineSpec = presetByName("2.0 Turbo");
   cyls: CylGeom[] = [];
   throttle = 0.45;
   /** 0..1 yağ seviyesi. Düşük seviye yağ basıncını çökertir. */
@@ -38,6 +39,28 @@ export class Simulation {
   shake = 0;
   knock = 0;
   time = 0;
+
+  /** Atölye açıkken kontak ve akü devri yönetir. Dinamometrede kapalıdır. */
+  workshop = false;
+  key: KeyPos = "on";
+  batteryIn = true;
+  negOn = true;
+  posOn = true;
+  holdDown = true;
+  batteryWeak = false;
+  cranking = false;
+  caught = true;
+  crankAge = 0;
+  /** Kullanıcının istediği devir; atölyede motor tutunca hedef olur. */
+  requestedRpm = 2400;
+  vtecForce = false;
+  /** 0..1, pim kayması. */
+  vtecEngaged = 0;
+  /** 0..1 kızdırma. */
+  glow = 0;
+  voltage = 12.6;
+  bayMessage = "";
+  bayLevel: "ok" | "warn" | "bad" = "ok";
 
   rodStage: 0 | 1 | 2 = 0;
   rodAge = 0;
@@ -67,6 +90,26 @@ export class Simulation {
     const red = redlineRpm(this.spec);
     this.targetRpm = clamp(this.targetRpm, 0, red * 1.18);
     this.rpm = clamp(this.rpm, 0, red * 1.18);
+  }
+
+  setWorkshop(on: boolean): void {
+    if (on === this.workshop) return;
+    this.workshop = on;
+    if (on) {
+      this.key = "off";
+      this.caught = false;
+      this.cranking = false;
+      this.crankAge = 0;
+      this.targetRpm = 0;
+      this.rpm = Math.min(this.rpm, 400);
+      this.bayMessage = "Kontak kapalı. Akü bağlıysa marşa bas.";
+      this.bayLevel = "ok";
+    } else {
+      this.cranking = false;
+      this.caught = true;
+      this.key = "on";
+      this.targetRpm = this.requestedRpm;
+    }
   }
 
   reset(): void {
@@ -198,6 +241,13 @@ export class Simulation {
 
     if (!this.seized && this.rodStage < 2) this.accumulateAbuse(red, dt);
 
+    this.stepWorkshop(dt);
+    const vtecSwitch = spec.vtecRpm ?? 5500;
+    const wantVtec = spec.valvetrain === "dohc16-vtec" && (this.vtecForce || this.rpm >= vtecSwitch);
+    const prevVtec = this.vtecEngaged;
+    this.vtecEngaged += ((wantVtec ? 1 : 0) - this.vtecEngaged) * (1 - Math.exp(-dt / 0.07));
+    if (prevVtec < 0.55 && this.vtecEngaged >= 0.55) this.events.push("vtec");
+
     let goal = this.targetRpm;
     if (this.heatSeize) goal = Math.min(goal, 650);
     if (this.seized || this.rodStage === 2) goal = 0;
@@ -244,7 +294,7 @@ export class Simulation {
 
     const est = this.seized || this.rpm < 250
       ? { torqueNm: 0, powerKw: 0, powerPs: 0 }
-      : estimatePower(spec, this.rpm, this.throttle, this.boost);
+      : estimatePower(spec, this.rpm, this.throttle, this.boost, this.vtecEngaged > 0.55);
     const health = (this.gasket ? 0.84 : 1) * (this.turboFail && spec.aspiration === "turbo" ? 0.95 : 1);
     this.torqueNm = est.torqueNm * health;
     this.powerKw = est.powerKw * health;
@@ -266,6 +316,85 @@ export class Simulation {
     if (this.message === "Motor düzgün çalışıyor" && (this.gasket || this.turboFail || this.rodStage > 0 || this.timing)) {
       /* mesaj arıza tarafından yönetilir */
     }
+    this.stepVoltage();
+  }
+
+  private electrical(): boolean {
+    return this.batteryIn && this.negOn && this.posOn;
+  }
+
+  private stepWorkshop(dt: number): void {
+    const diesel = this.spec.fuel === "dizel";
+    if (this.workshop && diesel && (this.key === "on" || this.key === "start")) {
+      this.glow = Math.min(1, this.glow + dt / 3);
+    } else {
+      this.glow = Math.max(0, this.glow - dt / 1.4);
+    }
+    if (!this.workshop) {
+      this.cranking = false;
+      this.caught = true;
+      return;
+    }
+    const power = this.electrical();
+    if (this.key === "start" && !power) {
+      this.cranking = false;
+      this.targetRpm = 0;
+      this.bayMessage = "Marş basmıyor. Akü kutuları veya akünün kendisi eksik.";
+      this.bayLevel = "bad";
+      return;
+    }
+    if (this.key === "start" && power && !this.seized) {
+      this.cranking = true;
+      this.crankAge += dt;
+      this.bayMessage = "Marş motoru çeviriyor.";
+      this.bayLevel = "ok";
+      if (this.batteryWeak) {
+        this.targetRpm = 85;
+        this.bayMessage = "Akü zayıf — marş yavaş, voltaj motoru tutturmuyor.";
+        this.bayLevel = "warn";
+        return;
+      }
+      if (this.crankAge > 1.05) {
+        this.caught = true;
+        this.cranking = false;
+        this.crankAge = 0;
+        this.key = "on";
+        this.events.push("catch");
+        this.bayMessage = "Motor tuttu. Kontak ON'da kaldı.";
+        this.bayLevel = "ok";
+      }
+      this.targetRpm = 230;
+      return;
+    }
+    this.cranking = false;
+    if (this.key !== "start") this.crankAge = 0;
+    if (!power || this.key === "off" || this.key === "acc") {
+      if (this.caught && !power) {
+        this.bayMessage = "Akü devresi açık — motor durdu.";
+        this.bayLevel = "bad";
+      }
+      this.caught = false;
+      this.targetRpm = 0;
+      return;
+    }
+    if (this.caught) this.targetRpm = Math.max(780, this.requestedRpm);
+    else this.targetRpm = 0;
+  }
+
+  private stepVoltage(): void {
+    if (!this.batteryIn) {
+      this.voltage = 0;
+      return;
+    }
+    if (this.cranking) {
+      this.voltage = this.batteryWeak ? 8.3 : 10.4;
+      return;
+    }
+    if (this.caught && this.rpm > 700 && this.electrical()) {
+      this.voltage = 14.1;
+      return;
+    }
+    this.voltage = this.batteryWeak ? 12.05 : 12.6;
   }
 
   /** Bu karede sesin çalacağı ateşlemeler. Krank derecesi cinsinden anlar. */

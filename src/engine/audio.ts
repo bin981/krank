@@ -152,6 +152,8 @@ export class EngineAudio {
       if (event === "bang" || event === "punch" || event === "grind") this.play(this.bang, event === "punch" ? 0.7 : 1);
       else if (event === "snap") this.play(this.crackle, 0.8);
       else if (event === "hiss") this.play(this.crackle, 0.35);
+      else if (event === "vtec") this.play(this.crackle, 0.45);
+      else if (event === "catch") this.play(this.gasClick, 0.7);
     }
     sim.events.length = 0;
 
@@ -162,14 +164,23 @@ export class EngineAudio {
     this.body.frequency.setTargetAtTime(Math.max(18, fireHz), now, 0.04);
     this.sub.frequency.setTargetAtTime(Math.max(12, fireHz * 0.5), now, 0.05);
 
-    const alive = sim.rpm > 280 && !sim.seized;
+    const cranking = sim.cranking;
+    const alive = sim.rpm > 280 && !sim.seized && !cranking;
     const load = sim.throttle * 0.75 + 0.25;
-    const bodyAmp = alive ? Math.min(0.16, (0.03 + sim.rpm / 14000) * load) * (diesel ? 0.7 : 1) : 0;
+    const vtec = sim.vtecEngaged > 0.55;
+    const bodyAmp = cranking
+      ? 0.11
+      : alive ? Math.min(0.16, (0.03 + sim.rpm / 14000) * load) * (diesel ? 0.7 : 1) * (vtec ? 1.15 : 1) : 0;
+    if (cranking) {
+      this.body.type = "square";
+      this.body.frequency.setTargetAtTime(this.batteryHz(sim), now, 0.03);
+    }
     this.bodyGain.gain.setTargetAtTime(bodyAmp, now, 0.05);
     this.subGain.gain.setTargetAtTime(alive ? bodyAmp * (diesel ? 0.45 : 0.8) : 0, now, 0.05);
     if (this.noiseGain && this.noiseFilter) {
-      this.noiseGain.gain.setTargetAtTime(alive ? 0.03 + sim.throttle * 0.06 : 0, now, 0.05);
-      this.noiseFilter.frequency.setTargetAtTime(diesel ? 1400 + sim.rpm * 0.12 : 500 + sim.throttle * 1600 + sim.rpm * 0.08, now, 0.05);
+      this.noiseGain.gain.setTargetAtTime(cranking ? 0.07 : alive ? 0.03 + sim.throttle * 0.06 : 0, now, 0.05);
+      const base = diesel ? 1400 + sim.rpm * 0.12 : 500 + sim.throttle * 1600 + sim.rpm * 0.08;
+      this.noiseFilter.frequency.setTargetAtTime(cranking ? 220 : base + (vtec ? 700 : 0), now, 0.05);
     }
 
     if (this.turbo && this.turboGain) {
@@ -183,7 +194,7 @@ export class EngineAudio {
       this.turboGain.gain.setTargetAtTime(alive || unstable ? whine : 0, now, 0.04);
     }
 
-    const fires = sim.firesSince(this.prevCrank);
+    const fires = cranking ? [] : sim.firesSince(this.prevCrank);
     const rate = Math.max(30, sim.rpm * 6);
     const click = diesel ? this.dieselClick : this.gasClick;
     const amp = diesel ? 0.55 : 0.38;
@@ -210,6 +221,10 @@ export class EngineAudio {
       this.play(this.crackle, 0.22);
     }
     this.prevRpm = sim.rpm;
+  }
+
+  private batteryHz(sim: Simulation): number {
+    return sim.batteryWeak ? 38 : 62;
   }
 
   private play(buffer: AudioBuffer | null, gain: number, when = this.ctx?.currentTime ?? 0): void {
