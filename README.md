@@ -2,6 +2,10 @@
 
 Tarayıcıda çalışan, dört zamanlı içten yanmalı motor simülatörü. Blok, piston, biyel, krank, eksantrik, supap ve turbo seçtiğin ölçülere göre prosedürel olarak kurulur. Arayüz Türkçedir. Kısa video çekmek için 9:16 kadrajı vardır.
 
+Oyna: [https://bin981.github.io/krank/](https://bin981.github.io/krank/)
+
+![2.0 turbo dizel, kesit](docs/screenshot.jpg)
+
 ## Çalıştırma
 
 Node.js 20 veya daha yeni bir sürüm gerekir.
@@ -20,7 +24,7 @@ npm run build
 npm run preview
 ```
 
-`dist/` klasörü statik olarak herhangi bir sunucuya konabilir. Adresler görelidir.
+`npm run build` üretimde varlıkları `/krank/` altına yazar. `main` dalına her itiş GitHub Actions ile [GitHub Pages](https://bin981.github.io/krank/) adresine gider. Yerel `npm run dev` kök adreste kalır.
 
 Ses, tarayıcı kuralı nedeniyle ilk tıklamadan sonra başlar. WebGL destekleyen güncel bir masaüstü tarayıcı gerekir.
 

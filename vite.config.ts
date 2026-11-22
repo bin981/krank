@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 
-export default defineConfig({
-  base: "./",
+export default defineConfig(({ command }) => ({
+  base: command === "build" ? "/krank/" : "/",
   server: {
     host: "0.0.0.0",
     port: 4731,
@@ -12,4 +12,4 @@ export default defineConfig({
     port: 4731,
     strictPort: true,
   },
-});
+}));
