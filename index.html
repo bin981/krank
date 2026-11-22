@@ -36,6 +36,7 @@
               <span class="live">CANLI</span>
             </div>
             <div class="bc-lower">
+              <p id="bc-hook" class="bc-hook"></p>
               <p id="bc-title">2,0 Sıra 4 Turbo Benzin</p>
               <p id="bc-sub">Ateşleme 1 – 3 – 4 – 2</p>
               <div class="bc-rpm"><b id="bc-rpm">2.400</b><small>dev/dk</small></div>
@@ -47,7 +48,11 @@
               <div id="bc-pips" class="pips"></div>
               <p id="bc-msg" class="bc-msg"></p>
             </div>
-            <button type="button" id="exit-shorts" class="exit-shorts">Kadrajdan çık</button>
+            <div class="shorts-tools">
+              <button type="button" id="shorts-clean" class="ghost">Temiz</button>
+              <button type="button" id="shorts-rec" class="ghost">Kaydet</button>
+              <button type="button" id="exit-shorts" class="exit-shorts">Kadrajdan çık</button>
+            </div>
           </div>
           <p id="hover" class="hover-name"></p>
           <aside id="part-card" hidden>
@@ -59,6 +64,7 @@
             <h3 id="tour-title">Emme</h3>
             <p id="tour-text"></p>
           </aside>
+          <p id="smoke" class="smoke" hidden></p>
           <p id="banner" class="banner ok" hidden></p>
         </div>
       </div>
@@ -151,6 +157,10 @@
           <p id="glow-lamp" class="glow-lamp" hidden>Kızdırma</p>
           <div id="bay-scene" class="bay-scene">
             <div class="bay-engine" aria-hidden="true"></div>
+            <div class="bay-air" title="Hava filtresi">Hava</div>
+            <div class="bay-fuse" title="Sigorta kutusu">Sigorta</div>
+            <div class="bay-cool" title="Genleşme kabı">Su</div>
+            <div class="bay-stick" title="Yağ çubuğu"></div>
             <div id="battery" class="battery" data-drag="battery">
               <div id="hold" class="hold" data-drag="hold">Kelepçe</div>
               <button type="button" id="cap-pos" class="cap pos" data-drag="pos">+</button>
@@ -187,6 +197,19 @@
             <span>dev/dk</span>
           </div>
         </div>
+        <div id="lamps" class="lamps" aria-label="İkaz lambaları">
+          <i id="lamp-bat" title="Akü">AKÜ</i>
+          <i id="lamp-oil" title="Yağ">YAĞ</i>
+          <i id="lamp-temp" title="Hararet">ISI</i>
+          <i id="lamp-cel" title="Arıza">CEL</i>
+          <i id="lamp-glow" title="Kızdırma">ISIT</i>
+        </div>
+        <div class="cluster">
+          <div><em>Yağ</em><strong id="cluster-oil">—</strong></div>
+          <div><em>Hararet</em><strong id="cluster-temp">—</strong></div>
+          <div><em>Boost</em><strong id="cluster-boost">—</strong></div>
+          <div><em>Akü</em><strong id="cluster-volt">—</strong></div>
+        </div>
         <div class="stats">
           <div><em>Tork</em><strong id="torque">0 Nm</strong></div>
           <div><em>Güç</em><strong id="power">0 bg</strong></div>
@@ -212,6 +235,21 @@
           <span>Aşırı basınç</span><i><b id="ab-boost"></b></i>
         </div>
 
+        <p class="kicker">Senaryo</p>
+        <select id="scenario-cat" aria-label="Senaryo kategorisi"></select>
+        <div id="scenario-list" class="chips"></div>
+        <p id="symptom" class="hint"></p>
+        <section id="obd">
+          <p class="kicker">OBD</p>
+          <ul id="obd-codes"></ul>
+          <dl id="obd-live" class="spec-card"></dl>
+        </section>
+        <button type="button" id="diag-start" class="accent">Teşhis oyunu</button>
+        <div id="diag" hidden>
+          <p class="hint">Gizli arıza. Tarayıcı, voltaj ve dumanı kullan, sonra teşhisi seç.</p>
+          <div id="diag-choices" class="chips"></div>
+          <p id="diag-result" class="status"></p>
+        </div>
         <p class="kicker">Arıza</p>
         <div class="fails">
           <button type="button" data-fail="rod">Biyel kırılması</button>

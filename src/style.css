@@ -210,6 +210,32 @@ body:not(.shorts) .hover-name { bottom: 128px; }
 .banner.bad { border-color: var(--hot); color: #ffb2a1; }
 body.shorts .banner { top: 18%; }
 
+#bc-hook { margin: 0 0 6px; font-size: clamp(18px, 4vw, 28px); letter-spacing: 0.04em; color: var(--acid); }
+.shorts-tools { position: absolute; top: 12%; right: 5%; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; z-index: 4; pointer-events: auto; }
+.shorts-tools .exit-shorts { position: static; }
+body.shorts #bc-title { font-size: clamp(32px, 7vw, 56px); }
+body.shorts.clean .bc-top, body.shorts.clean .bc-lower { opacity: 0; }
+.lamps { display: flex; gap: 6px; margin: 6px 0; }
+.lamps i { font-style: normal; font-size: 10px; letter-spacing: 0.08em; padding: 4px 6px; border-radius: 6px; border: 1px solid #333; color: #666; }
+.lamps i.on { color: #14160c; background: var(--hot); border-color: var(--hot); }
+#lamp-oil.on { background: #ffb020; }
+#lamp-cel.on { background: #e2ff4d; }
+.cluster { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+.cluster div { background: rgba(255,255,255,0.03); border: 1px solid #2a2e24; padding: 6px; border-radius: 8px; }
+.cluster em { display: block; color: var(--muted); font-style: normal; font-size: 10px; letter-spacing: 0.08em; }
+.cluster strong { font-family: Oswald, sans-serif; font-size: 16px; font-weight: 500; }
+.smoke { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); padding: 8px 14px; border-radius: 999px; background: rgba(0,0,0,0.45); }
+.smoke.white { color: #f4f1ea; }
+.smoke.blue { color: #8fd0ff; }
+.smoke.black { color: #9a9a9a; }
+#obd-codes { margin: 0; padding-left: 18px; }
+#obd-codes li { font-family: Oswald, sans-serif; letter-spacing: 0.06em; }
+.bay-air, .bay-fuse, .bay-cool, .bay-stick { position: absolute; font-size: 10px; letter-spacing: 0.08em; color: var(--muted); }
+.bay-air { right: 18px; bottom: 18px; }
+.bay-fuse { right: 18px; top: 12px; }
+.bay-cool { left: 150px; top: 18px; width: 28px; height: 36px; border: 1px solid #3ec6c0; border-radius: 4px; }
+.bay-stick { left: 150px; bottom: 28px; width: 4px; height: 42px; background: #c6a15a; }
+
 #broadcast {
   position: absolute;
   inset: 0;
@@ -217,6 +243,7 @@ body.shorts .banner { top: 18%; }
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  padding: 18% 8% 28% 8%;
   padding: 7% 8% 18% 7%;
 }
 .bc-top { display: flex; justify-content: space-between; align-items: center; }

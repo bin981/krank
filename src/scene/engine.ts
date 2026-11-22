@@ -123,6 +123,11 @@ export class EngineAssembly {
   private fireStrength = 0;
   hoverName = "";
   private vtecPin: THREE.Mesh | null = null;
+  private vtecRockers: THREE.Object3D[] = [];
+  private starterPinion: THREE.Object3D | null = null;
+  private vgt: THREE.Object3D | null = null;
+  private oilDrops: THREE.Object3D[] = [];
+  private coolantDrops: THREE.Object3D[] = [];
 
   constructor(spec: EngineSpec) {
     this.spec = spec;
@@ -276,12 +281,29 @@ export class EngineAssembly {
 
     const heat = Math.min(1, sim.throttle * 0.75 + sim.rpm / 9000);
     if (this.vtecPin) {
-      const t = sim.vtecEngaged;
-      this.vtecPin.position.z = this.dims.bore * (0.02 + t * 0.16);
+      const t = sim.vtecBlocked ? 0 : sim.vtecEngaged;
+      this.vtecPin.position.x = this.dims.bore * (t * 0.12);
       const mat = this.vtecPin.material as THREE.MeshStandardMaterial;
       mat.emissive.set(t > 0.6 ? 0x9dff2a : 0x000000);
       mat.emissiveIntensity = t > 0.6 ? 0.8 : 0;
+      this.vtecRockers.forEach((rocker, i) => {
+        rocker.rotation.z = t * (i === 1 ? 0.35 : 0.08);
+      });
     }
+    if (this.starterPinion) this.starterPinion.position.z = sim.cranking ? this.dims.bore * 0.18 : 0;
+    if (this.vgt) this.vgt.rotation.x += dt * (0.4 + sim.boost * 6);
+    this.oilDrops.forEach((drop, i) => {
+      drop.position.y -= dt * (18 + sim.oil * 8);
+      if (drop.position.y < -this.dims.bore * 0.3) drop.position.y = this.dims.bore * 0.15;
+      drop.visible = sim.oil > 0.4;
+      drop.position.x = Math.sin(sim.time * 3 + i) * 4;
+    });
+    this.coolantDrops.forEach((drop, i) => {
+      drop.position.x += dt * 30;
+      if (drop.position.x > this.dims.bore * 0.4) drop.position.x = -this.dims.bore * 0.2;
+      drop.visible = sim.coolant < 125;
+      drop.position.y = Math.sin(sim.time * 4 + i) * 2;
+    });
     this.exhaustMat.emissiveIntensity = heat * 0.85;
     this.turboMat.emissiveIntensity = sim.turboFail ? 0.2 : heat * 0.55;
     this.gasketMat.emissiveIntensity = sim.gasket ? 0.65 + Math.sin(sim.time * 9) * 0.35 : 0;
@@ -472,6 +494,7 @@ export class EngineAssembly {
     this.buildBelt(dims);
     this.buildTurbo(dims);
     this.buildReservoir(dims);
+    this.buildAccessories(dims);
     this.label("Krank mili", this.crank, 0, dims.r * 1.4, 0);
     this.label("Volan", this.crank, this.rearX(geoms) + dims.bore * 0.2, 0, 0);
   }
@@ -518,9 +541,20 @@ export class EngineAssembly {
         roughness: 0.32,
         emissive: new THREE.Color(0x000000),
       }));
-      const pin = new THREE.Mesh(this.track(new THREE.CylinderGeometry(2.1, 2.1, dims.bore * 0.2, 8)), pinMat);
+      const names = ["Düşük kam külbütörü", "Orta külbütör", "Yüksek kam külbütörü"];
+      names.forEach((name, i) => {
+        const rocker = new THREE.Mesh(
+          this.track(new THREE.BoxGeometry(dims.bore * 0.045, dims.bore * 0.035, dims.bore * 0.32)),
+          this.metal(0xb7c0c8, 0.28, "steel"),
+        );
+        rocker.position.set((i - 1) * dims.bore * 0.07, dims.headH * 0.7, dims.bore * 0.16);
+        rocker.userData.part = name;
+        intake.add(rocker);
+        this.vtecRockers.push(rocker);
+      });
+      const pin = new THREE.Mesh(this.track(new THREE.CylinderGeometry(2.1, 2.1, dims.bore * 0.28, 8)), pinMat);
       pin.rotation.z = Math.PI / 2;
-      pin.position.set(0, dims.headH * 0.62, dims.bore * 0.02);
+      pin.position.set(0, dims.headH * 0.7, dims.bore * 0.16);
       pin.userData.part = "VTEC pimi";
       intake.add(pin);
       this.vtecPin = pin;
@@ -757,17 +791,109 @@ export class EngineAssembly {
     plug.position.set(mid, this.panBase - dims.bore * 0.48, width * 0.18);
   }
 
+  private buildAccessories(dims: Dims): void {
+    const front = this.crankPulleyX;
+    const xs = this.cyls.map((c) => c.geom.x);
+    const rear = Math.max(...xs);
+    const alt = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.26, dims.bore * 0.26, dims.bore * 0.3, 14)), this.metal(0x8d949c, 0.35, "alloy"));
+    alt.rotation.z = Math.PI / 2;
+    alt.position.set(front + dims.bore * 0.15, dims.bore * 0.85, -dims.bore * 0.75);
+    alt.userData.part = "Alternatör";
+    this.root.add(alt);
+    const belt = new THREE.Mesh(
+      this.track(new THREE.TorusGeometry(dims.bore * 0.55, 2.2, 6, 20)),
+      this.plain(0x1a1c18, 0.7, 0.05),
+    );
+    belt.rotation.y = Math.PI / 2;
+    belt.position.set(front, dims.bore * 0.4, -dims.bore * 0.35);
+    belt.userData.part = "Aksesuar kayışı";
+    this.root.add(belt);
+
+    const starter = new THREE.Group();
+    const body = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.16, dims.bore * 0.16, dims.bore * 0.42, 12)), this.metal(0x4a5058, 0.45));
+    body.rotation.z = Math.PI / 2;
+    const pinion = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.1, dims.bore * 0.1, dims.bore * 0.08, 12)), this.metal(0xd0d4da, 0.25));
+    pinion.rotation.z = Math.PI / 2;
+    pinion.position.z = 0;
+    starter.add(body, pinion);
+    starter.position.set(rear + dims.bore * 0.35, -dims.bore * 0.15, dims.bore * 0.85);
+    starter.userData.part = "Marş motoru";
+    this.starterPinion = pinion;
+    this.root.add(starter);
+
+    if (this.spec.fuel === "dizel") {
+      const rail = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.06, dims.bore * 0.06, dims.bore * 2.4, 10)), this.metal(0xc5c8cc, 0.2));
+      rail.rotation.z = Math.PI / 2;
+      rail.position.set(0, dims.deck + dims.headH * 0.95, -dims.bore * 0.15);
+      rail.userData.part = "Common-rail";
+      this.root.add(rail);
+    } else {
+      const coil = new THREE.Mesh(this.track(new THREE.BoxGeometry(dims.bore * 2.2, dims.bore * 0.12, dims.bore * 0.16)), this.plain(0x1c1e22, 0.5, 0.2));
+      coil.position.set(0, dims.deck + dims.headH * 0.95, 0);
+      coil.userData.part = "Bobin";
+      this.root.add(coil);
+    }
+
+    const oilMat = this.trackMat(new THREE.MeshStandardMaterial({ color: 0xc6a15a, transparent: true, opacity: 0.75, roughness: 0.3 }));
+    for (let i = 0; i < 5; i++) {
+      const drop = new THREE.Mesh(this.track(new THREE.SphereGeometry(2.2, 6, 6)), oilMat);
+      drop.position.set((i - 2) * 8, dims.bore * 0.1, 0);
+      drop.userData.part = "Yağ akışı";
+      this.pan?.add(drop);
+      this.oilDrops.push(drop);
+    }
+    const waterMat = this.trackMat(new THREE.MeshStandardMaterial({ color: 0x3ec6c0, transparent: true, opacity: 0.7, roughness: 0.2 }));
+    for (let i = 0; i < 4; i++) {
+      const drop = new THREE.Mesh(this.track(new THREE.SphereGeometry(2.4, 6, 6)), waterMat);
+      drop.position.set(-dims.bore * 0.1, dims.bore * 0.2, 0);
+      drop.userData.part = "Soğutma suyu";
+      this.root.add(drop);
+      this.coolantDrops.push(drop);
+    }
+  }
+
   private buildBelt(dims: Dims): void {
     const front = this.crankPulleyX;
     const points = [new THREE.Vector3(front, 0, 0), ...this.pulleyPoints];
+    const chain = this.spec.timingDrive === "zincir";
     if (points.length >= 2) {
       const curve = new THREE.CatmullRomCurve3(points, false, "catmullrom", 0.2);
-      const belt = new THREE.Mesh(this.track(new THREE.TubeGeometry(curve, 64, 3.4, 6, false)), this.plain(0x141614, 0.72, 0.02));
-      belt.userData.part = "Triger kayışı";
-      this.belt.add(belt);
+      if (chain) {
+        const sprocketGeo = this.track(new THREE.CylinderGeometry(1, 1, dims.bore * 0.1, 16));
+        const addSprocket = (p: THREE.Vector3, radius: number) => {
+          const m = new THREE.Mesh(sprocketGeo, this.metal(0x9aa0a6, 0.32, "steel"));
+          m.rotation.z = Math.PI / 2;
+          m.scale.set(radius, 1, radius);
+          m.position.copy(p);
+          m.userData.part = "Zincir dişlisi";
+          this.belt.add(m);
+        };
+        addSprocket(points[0], dims.bore * 0.2);
+        for (const p of this.pulleyPoints) addSprocket(p, dims.bore * 0.15);
+        const n = preferLite() ? 16 : 28;
+        const linkGeo = this.track(new THREE.BoxGeometry(dims.bore * 0.07, dims.bore * 0.045, dims.bore * 0.12));
+        const linkMat = this.metal(0x5e666c, 0.42, "steel");
+        for (let i = 0; i < n; i++) {
+          const p = curve.getPoint(i / n);
+          const q = curve.getPoint((i + 0.5) / n);
+          const link = new THREE.Mesh(linkGeo, linkMat);
+          link.position.copy(p);
+          link.lookAt(q);
+          this.belt.add(link);
+        }
+        const tensioner = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.07, dims.bore * 0.07, dims.bore * 0.22, 10)), this.metal(0xd0d4da, 0.25));
+        tensioner.position.set(front + dims.bore * 0.35, dims.bore * 0.4, dims.bore * 0.12);
+        tensioner.userData.part = "Zincir gergisi";
+        this.belt.add(tensioner);
+      } else {
+        const belt = new THREE.Mesh(this.track(new THREE.TubeGeometry(curve, 64, 3.4, 6, false)), this.plain(0x141614, 0.72, 0.02));
+        belt.userData.part = "Triger kayışı";
+        this.belt.add(belt);
+      }
     }
+    this.belt.userData.part = chain ? "Triger zinciri" : "Triger kayışı";
     this.root.add(this.belt);
-    this.label("Triger", this.belt, front, dims.bore * 0.5, 0);
+    this.label(chain ? "Zincir" : "Triger", this.belt, front, dims.bore * 0.5, 0);
   }
 
   private buildTurbo(dims: Dims): void {
@@ -807,6 +933,22 @@ export class EngineAssembly {
     };
     mkWheel(-dims.bore * 0.02, 1);
     mkWheel(dims.bore * 0.38, 0.86);
+    const vanes = new THREE.Group();
+    vanes.position.x = dims.bore * 0.38;
+    const vaneGeo = this.track(new THREE.BoxGeometry(dims.bore * 0.02, dims.bore * 0.16, dims.bore * 0.04));
+    for (let i = 0; i < 8; i++) {
+      const vane = new THREE.Mesh(vaneGeo, this.metal(0xc8ccd2, 0.25, "steel"));
+      const a = (i / 8) * Math.PI * 2;
+      vane.position.set(0, Math.cos(a) * dims.bore * 0.2, Math.sin(a) * dims.bore * 0.2);
+      vane.rotation.x = a;
+      vane.userData.part = "VGT kanat";
+      vanes.add(vane);
+    }
+    const gate = new THREE.Mesh(this.track(new THREE.BoxGeometry(dims.bore * 0.12, dims.bore * 0.08, dims.bore * 0.02)), this.metal(0x8a4a3a, 0.4));
+    gate.position.set(dims.bore * 0.2, dims.bore * 0.22, 0);
+    gate.userData.part = "Wastegate";
+    g.add(vanes, gate);
+    this.vgt = vanes;
     this.root.add(g);
     this.label("Turbo", g, 0, dims.bore * 0.45, 0);
 

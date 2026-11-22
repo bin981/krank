@@ -24,6 +24,7 @@ import {
   nf1,
 } from "./engine/model";
 import type { FailId, Simulation } from "./engine/sim";
+import { SCENARIOS, scenarioById } from "./scenarios";
 import type { ViewState } from "./view";
 import type { CameraPreset } from "./scene/studio";
 
@@ -46,6 +47,9 @@ export class Hud {
   mixExhaust = 0.85;
   mixIntake = 0.55;
   mixMech = 0.4;
+  private diagSecret = "";
+  private recorder: MediaRecorder | null = null;
+  private recChunks: Blob[] = [];
 
   constructor(
     private readonly onSpec: (spec: EngineSpec) => void,
@@ -152,6 +156,19 @@ export class Hud {
       const ratio = Math.max(0, Math.min(1, rpm / (red * 1.05)));
       arc.style.strokeDashoffset = String(100 - ratio * 100);
       arc.style.stroke = rpm > red ? "#ff4d1c" : rpm > red * 0.92 ? "#ffb020" : "#e2ff4d";
+    }
+    this.paintCluster(sim);
+    this.paintObd(sim);
+    const smoke = document.querySelector("#smoke") as HTMLElement | null;
+    if (smoke) {
+      smoke.hidden = sim.smoke === "none";
+      smoke.className = `smoke ${sim.smoke}`;
+      smoke.textContent = sim.smoke === "white" ? "Beyaz duman" : sim.smoke === "blue" ? "Mavi duman" : sim.smoke === "black" ? "Siyah duman" : "";
+    }
+    const hook = document.querySelector("#bc-hook");
+    if (hook) {
+      const sc = scenarioById(sim.scenarioId);
+      hook.textContent = sc ? sc.name : "Motoru izle";
     }
 
     bar("#ab-rev", sim.abuse.rev);
@@ -311,6 +328,27 @@ export class Hud {
     mix("mix-ex", (v) => { this.mixExhaust = v; }, "mix-ex-val");
     mix("mix-in", (v) => { this.mixIntake = v; }, "mix-in-val");
     mix("mix-me", (v) => { this.mixMech = v; }, "mix-me-val");
+    this.fillScenarios();
+    document.querySelector("#scenario-cat")?.addEventListener("change", () => this.fillScenarios());
+    document.querySelector("#scenario-list")?.addEventListener("click", (ev) => {
+      const btn = (ev.target as HTMLElement).closest("button");
+      if (!btn?.dataset.scenario) return;
+      this.onScenario(btn.dataset.scenario);
+    });
+    document.querySelector("#diag-start")?.addEventListener("click", () => this.startDiagnosis());
+    document.querySelector("#diag-choices")?.addEventListener("click", (ev) => {
+      const btn = (ev.target as HTMLElement).closest("button");
+      if (!btn?.dataset.scenario || !this.diagSecret) return;
+      const ok = btn.dataset.scenario === this.diagSecret;
+      const result = document.querySelector("#diag-result") as HTMLElement;
+      const answer = scenarioById(this.diagSecret);
+      result.textContent = ok ? "Doğru teşhis." : `Yanlış. Doğrusu: ${answer?.name ?? ""}. ${answer?.hint ?? ""}`;
+      result.className = `status ${ok ? "ok" : "bad"}`;
+    });
+    document.querySelector("#shorts-clean")?.addEventListener("click", () => {
+      document.body.classList.toggle("clean");
+    });
+    document.querySelector("#shorts-rec")?.addEventListener("click", () => this.toggleRecord());
     document.querySelector("#drawer-left")?.addEventListener("click", () => {
       document.body.classList.toggle("show-left");
       document.body.classList.remove("show-right");
@@ -435,6 +473,129 @@ export class Hud {
       const p = PRESETS.find((x) => x.name === b.dataset.name);
       b.classList.toggle("on", !!p && sameSpec(p.spec, this.spec));
     });
+  }
+
+  private onScenario(id: string): void {
+    const simHolder = (window as unknown as { __krankSetScenario?: (id: string) => void }).__krankSetScenario;
+    simHolder?.(id);
+  }
+
+  private fillScenarios(): void {
+    const cat = document.querySelector("#scenario-cat") as HTMLSelectElement | null;
+    const list = document.querySelector("#scenario-list");
+    if (!cat || !list) return;
+    const cats = ["Hepsi", ...new Set(SCENARIOS.map((s) => s.cat))];
+    if (!cat.childElementCount) {
+      for (const c of cats) {
+        const o = document.createElement("option");
+        o.value = c;
+        o.textContent = c;
+        cat.appendChild(o);
+      }
+    }
+    const chosen = cat.value || "Hepsi";
+    list.innerHTML = "";
+    for (const s of SCENARIOS.filter((x) => chosen === "Hepsi" || x.cat === chosen)) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.dataset.scenario = s.id;
+      b.textContent = s.name;
+      list.appendChild(b);
+    }
+  }
+
+  private startDiagnosis(): void {
+    const pool = SCENARIOS.filter((s) => s.codes.length > 0);
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    this.diagSecret = pick.id;
+    this.onScenario(pick.id);
+    const box = document.querySelector("#diag") as HTMLElement;
+    box.hidden = false;
+    const choices = document.querySelector("#diag-choices");
+    if (!choices) return;
+    choices.innerHTML = "";
+    for (const s of pool) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.dataset.scenario = s.id;
+      b.textContent = s.name;
+      choices.appendChild(b);
+    }
+    const result = document.querySelector("#diag-result");
+    if (result) result.textContent = "";
+    const symptom = document.querySelector("#symptom");
+    if (symptom) symptom.textContent = "Belirti gizli. OBD ve dumanı oku.";
+  }
+
+  private paintCluster(sim: Simulation): void {
+    const lamp = (id: string, on: boolean) => document.querySelector(id)?.classList.toggle("on", on);
+    lamp("#lamp-bat", sim.lamps.bat || sim.voltage < 12.2);
+    lamp("#lamp-oil", sim.lamps.oil || sim.oil < 1.1);
+    lamp("#lamp-temp", sim.lamps.temp || sim.coolant > 110);
+    lamp("#lamp-cel", sim.lamps.cel || sim.scenarioId !== "none" && sim.scenarioId !== "warm");
+    lamp("#lamp-glow", sim.lamps.glow || (sim.spec.fuel === "dizel" && sim.glow > 0.05 && sim.glow < 0.98));
+    text("#cluster-oil", `${nf1.format(sim.oil)} bar`);
+    text("#cluster-temp", `${nf0.format(sim.coolant)} °C`);
+    text("#cluster-boost", sim.spec.aspiration === "turbo" ? `${nf1.format(sim.boost)} bar` : "—");
+    text("#cluster-volt", `${nf1.format(sim.voltage)} V`);
+  }
+
+  private paintObd(sim: Simulation): void {
+    const codes = document.querySelector("#obd-codes");
+    const live = document.querySelector("#obd-live");
+    if (!codes || !live) return;
+    const def = scenarioById(sim.scenarioId);
+    const hidden = this.diagSecret && this.diagSecret === sim.scenarioId;
+    codes.innerHTML = "";
+    const list = hidden ? ["—"] : (def?.codes.length ? def.codes : ["Kod yok"]);
+    for (const code of list) {
+      const li = document.createElement("li");
+      li.textContent = code;
+      codes.appendChild(li);
+    }
+    if (!hidden && def) {
+      const symptom = document.querySelector("#symptom");
+      if (symptom && !this.diagSecret) symptom.textContent = def.hint;
+    }
+    const rows: [string, string][] = [
+      ["Devir", `${nf0.format(sim.indicatedRpm)}`],
+      ["Hararet", `${nf0.format(sim.coolant)} °C`],
+      ["MAP/Boost", `${nf1.format(sim.boost)} bar`],
+      ["Rail", `${nf0.format(sim.railBar)}`],
+      ["Akü", `${nf1.format(sim.voltage)} V`],
+      ["STFT", `${nf0.format(sim.stft)} %`],
+      ["LTFT", `${nf0.format(sim.ltft)} %`],
+      ["Vakum", `${nf0.format(sim.vacuum)} kPa`],
+    ];
+    live.innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+  }
+
+  private toggleRecord(): void {
+    const canvas = document.querySelector("#c") as HTMLCanvasElement | null;
+    const btn = document.querySelector("#shorts-rec") as HTMLButtonElement | null;
+    if (!canvas || typeof MediaRecorder === "undefined") {
+      if (btn) btn.textContent = "Kayıt yok";
+      return;
+    }
+    if (this.recorder && this.recorder.state === "recording") {
+      this.recorder.stop();
+      if (btn) btn.textContent = "Kaydet";
+      return;
+    }
+    const stream = canvas.captureStream(30);
+    const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9") ? "video/webm;codecs=vp9" : "video/webm";
+    this.recChunks = [];
+    this.recorder = new MediaRecorder(stream, { mimeType: mime });
+    this.recorder.ondataavailable = (ev) => { if (ev.data.size) this.recChunks.push(ev.data); };
+    this.recorder.onstop = () => {
+      const blob = new Blob(this.recChunks, { type: mime });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "krank-shorts.webm";
+      a.click();
+    };
+    this.recorder.start();
+    if (btn) btn.textContent = "Durdur";
   }
 
   private paintSpecCard(): void {

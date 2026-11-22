@@ -59,6 +59,7 @@ const sim = new Simulation();
 const audio = new EngineAudio();
 
 const workshop = new Workshop(sim);
+(window as unknown as { __krankSetScenario?: (id: string) => void }).__krankSetScenario = (id) => sim.setScenario(id);
 
 const hud = new Hud(
   (spec) => applySpec(spec),
@@ -111,7 +112,10 @@ function loop(now: number): void {
   last = now;
   try {
     const view = hud.view();
-    if (view && hud.shortsOn !== studio.shorts) studio.setShorts(hud.shortsOn);
+    if (view && hud.shortsOn !== studio.shorts) {
+      studio.setShorts(hud.shortsOn);
+      if (hud.shortsOn && sim.scenarioId !== "none") studio.frameTo("cine");
+    }
     sim.throttle = hud.throttle;
     sim.requestedRpm = hud.rpm;
     sim.vibe = hud.vibe;
