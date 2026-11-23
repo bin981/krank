@@ -64,8 +64,6 @@ const COL_EXH = new THREE.Color(0.42, 0.36, 0.32);
 const COL_HOT = new THREE.Color(1, 0.42, 0.12);
 const COL_WHITE = new THREE.Color(0.92, 0.94, 0.93);
 const COL_BLUE = new THREE.Color(0.35, 0.48, 0.95);
-const COL_AIR = new THREE.Color(0.62, 0.82, 1);
-
 function roundedRect(shape: THREE.Shape, x: number, y: number, w: number, h: number, r: number): void {
   const rr = Math.max(0.5, Math.min(r, w / 2 - 0.2, h / 2 - 0.2));
   shape.moveTo(x + rr, y);
@@ -91,6 +89,17 @@ export class EngineAssembly {
   private readonly mats: THREE.Material[] = [];
   private readonly housing: THREE.MeshStandardMaterial[] = [];
   private readonly hideInCut: THREE.Object3D[] = [];
+  private readonly showInCut: THREE.Object3D[] = [];
+  private serviceCover: THREE.Object3D | null = null;
+  coverOn = true;
+
+  setCover(on: boolean): void {
+    this.coverOn = on;
+    if (this.serviceCover) this.serviceCover.visible = on;
+  }
+  blockMm = 0;
+  frontMm = 0;
+  rearMm = 0;
   private readonly labels: CSS2DObject[] = [];
   private readonly chunks: Chunk[] = [];
   private readonly particles = new ParticleField();
@@ -282,9 +291,10 @@ export class EngineAssembly {
     this.v3.copy(this.fireLocal);
     this.root.localToWorld(this.v3);
     fireLight.position.copy(this.v3);
-    const hot = this.fireStrength * (0.6 + sim.throttle);
-    fireLight.intensity = hot * 18;
-    fireLight.distance = 2.4;
+    const faultGlow = sim.smoke !== "none" || sim.gasket || sim.turboFail || sim.rodStage > 0 || sim.heatSeize;
+    const hot = faultGlow ? this.fireStrength * (0.6 + sim.throttle) : 0;
+    fireLight.intensity = hot * 6;
+    fireLight.distance = 1.1;
     fireLight.color.set(sim.spec.fuel === "dizel" ? 0xffa24a : 0xff6a2a);
 
     const heat = Math.min(1, sim.throttle * 0.75 + sim.rpm / 9000);
@@ -312,8 +322,8 @@ export class EngineAssembly {
       drop.visible = sim.coolant < 125;
       drop.position.y = Math.sin(sim.time * 4 + i) * 2;
     });
-    this.exhaustMat.emissiveIntensity = heat * 0.85;
-    this.turboMat.emissiveIntensity = sim.turboFail ? 0.2 : heat * 0.55;
+    this.exhaustMat.emissiveIntensity = faultGlow ? heat * 0.45 : 0;
+    this.turboMat.emissiveIntensity = sim.turboFail ? 0.35 : 0;
     this.gasketMat.emissiveIntensity = sim.gasket ? 0.65 + Math.sin(sim.time * 9) * 0.35 : 0;
     for (const m of this.glowPlugMats) {
       m.emissiveIntensity = sim.spec.fuel === "dizel" ? 0.7 + Math.sin(sim.time * 6) * 0.15 : 0;
@@ -367,7 +377,10 @@ export class EngineAssembly {
     this.updateChunks(dt);
     this.particles.update(dt);
     const cut = view.mode === "cutaway";
+    const internals = cut || view.mode === "xray" || view.explode > 0.35;
     for (const obj of this.hideInCut) obj.visible = !cut;
+    for (const obj of this.showInCut) obj.visible = internals;
+    if (this.serviceCover) this.serviceCover.visible = this.coverOn && !cut;
     this.setXray(view.mode === "xray");
   }
 
@@ -400,8 +413,8 @@ export class EngineAssembly {
     blockMat.userData.pbr = gas ? "iron" : "ironDark";
     const headMat = this.paint(0xd5dbe2, 0.18, 0.96, true);
     headMat.userData.pbr = "alu";
-    const coverMat = this.paint(gas ? 0xb4232c : 0x1a1c16, gas ? 0.38 : 0.5, gas ? 0.08 : 0.55, true);
-    coverMat.userData.pbr = gas ? "paint" : "alu";
+    const coverMat = this.paint(0x1a1d22, 0.72, 0.06, true);
+    coverMat.userData.pbr = "";
     if (coverMat instanceof THREE.MeshPhysicalMaterial && gas) {
       coverMat.clearcoat = 0.65;
       coverMat.clearcoatRoughness = 0.28;
@@ -442,6 +455,7 @@ export class EngineAssembly {
 
       const midX = list.reduce((s, c) => s + c.x, 0) / list.length;
       const length = (list.length - 1) * dims.spacing + dims.bore * 1.35;
+      this.blockMm = Math.max(this.blockMm, length);
       const width = dims.bore * 1.28;
       const blockH = dims.deck - dims.boreBottom;
       const boreHoles = list.map((c) => ({ x: c.x - midX, z: 0, r: dims.bore / 2 }));
@@ -513,6 +527,8 @@ export class EngineAssembly {
     this.buildTurbo(dims);
     this.buildReservoir(dims);
     this.buildAccessories(dims);
+    this.buildGearbox(dims);
+    this.buildServiceCover(dims);
     this.label("Krank mili", this.crank, 0, dims.r * 1.4, 0);
     this.label("Volan", this.crank, this.rearX(geoms) + dims.bore * 0.2, 0, 0);
   }
@@ -689,6 +705,7 @@ export class EngineAssembly {
     fly.castShadow = true;
     fly.userData.part = "Volan";
     this.crank.add(fly);
+    this.showInCut.push(fly);
     const teeth = new THREE.InstancedMesh(this.track(new THREE.BoxGeometry(4, 7, 5)), this.metal(0x9aa0a6, 0.4), 42);
     const dummy = new THREE.Object3D();
     const toothGeo = teeth.geometry as THREE.BoxGeometry;
@@ -701,6 +718,9 @@ export class EngineAssembly {
     }
     teeth.castShadow = true;
     this.crank.add(teeth);
+    this.showInCut.push(teeth);
+    this.frontMm = front;
+    this.rearMm = rear;
   }
 
   private buildCam(
@@ -765,6 +785,15 @@ export class EngineAssembly {
     log.position.set(mid, y, z);
     log.userData.part = exhaust ? "Egzoz manifoldu" : "Emme manifoldu";
     parent.add(log);
+    if (exhaust) {
+      const shield = new THREE.Mesh(
+        this.track(new THREE.BoxGeometry(len * 0.92, dims.bore * 0.55, dims.bore * 0.08)),
+        this.plain(0x5c584c, 0.72, 0.35),
+      );
+      shield.position.set(mid, y, z + sign * dims.bore * 0.28);
+      shield.userData.part = "Isı kalkanı";
+      parent.add(shield);
+    }
     for (const c of list) {
       const runner = new THREE.Mesh(this.track(new THREE.BoxGeometry(dims.bore * 0.26, dims.bore * 0.2, dims.bore * 0.48)), mat);
       runner.position.set(c.x, y, sign * dims.bore * 0.5);
@@ -828,6 +857,22 @@ export class EngineAssembly {
     belt.position.set(front, dims.bore * 0.4, -dims.bore * 0.35);
     belt.userData.part = "Aksesuar kayışı";
     this.root.add(belt);
+    const pulleyMat = this.metal(0xb0b6bc, 0.32, "steel");
+    const addPulley = (y: number, z: number, r: number, name: string) => {
+      const p = new THREE.Mesh(this.track(new THREE.CylinderGeometry(r, r, dims.bore * 0.16, 16)), pulleyMat);
+      p.rotation.z = Math.PI / 2;
+      p.position.set(front - dims.bore * 0.05, y, z);
+      p.userData.part = name;
+      this.root.add(p);
+    };
+    addPulley(dims.bore * 0.15, dims.bore * 0.55, dims.bore * 0.22, "Klimanın kasnağı");
+    addPulley(dims.bore * 0.95, dims.bore * 0.15, dims.bore * 0.16, "Gergi kasnağı");
+    addPulley(-dims.bore * 0.15, -dims.bore * 0.15, dims.bore * 0.2, "Krank kasnağı");
+    const ac = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.22, dims.bore * 0.22, dims.bore * 0.36, 14)), this.paint(0x22262b, 0.55, 0.2, false));
+    ac.rotation.z = Math.PI / 2;
+    ac.position.set(front + dims.bore * 0.2, -dims.bore * 0.05, dims.bore * 0.55);
+    ac.userData.part = "Klima kompresörü";
+    this.root.add(ac);
 
     const starter = new THREE.Group();
     const body = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.16, dims.bore * 0.16, dims.bore * 0.42, 12)), this.metal(0x4a5058, 0.45));
@@ -848,7 +893,13 @@ export class EngineAssembly {
       rail.userData.part = "Common-rail";
       this.root.add(rail);
     } else {
-      const coil = new THREE.Mesh(this.track(new THREE.BoxGeometry(dims.bore * 2.2, dims.bore * 0.12, dims.bore * 0.16)), this.plain(0x1c1e22, 0.5, 0.2));
+      const coil = new THREE.Group();
+      const coilMat = this.plain(0x1c1e22, 0.55, 0.08);
+      for (let i = 0; i < 4; i++) {
+        const pack = new THREE.Mesh(this.track(new THREE.BoxGeometry(dims.bore * 0.42, dims.bore * 0.16, dims.bore * 0.22)), coilMat);
+        pack.position.set((i - 1.5) * dims.bore * 0.72, 0, 0);
+        coil.add(pack);
+      }
       coil.position.set(0, dims.deck + dims.headH * 0.95, 0);
       coil.userData.part = "Bobin";
       this.root.add(coil);
@@ -916,14 +967,51 @@ export class EngineAssembly {
     this.belt.userData.part = chain ? "Triger zinciri" : "Triger kayışı";
     this.root.add(this.belt);
     const timingCover = new THREE.Mesh(
-      this.track(new THREE.BoxGeometry(dims.bore * 0.15, dims.bore * 1.35, dims.bore * 1.05)),
-      this.paint(0x2c3136, 0.62, 0.12, false),
+      this.track(new THREE.BoxGeometry(dims.bore * 0.32, dims.bore * 1.85, dims.bore * 1.35)),
+      this.paint(0x141618, 0.78, 0.04, false),
     );
-    timingCover.position.set(front - dims.bore * 0.42, dims.bore * 0.28, 0);
+    timingCover.position.set(front - dims.bore * 0.22, dims.bore * 0.22, 0);
     timingCover.userData.part = "Triger kapağı";
     this.boltRow(timingCover, 5, dims.bore * 0.02, dims.bore * 0.42, dims.bore * 0.62);
     this.root.add(timingCover);
     this.label(chain ? "Zincir" : "Triger", this.belt, front, dims.bore * 0.5, 0);
+  }
+
+  private buildGearbox(dims: Dims): void {
+    const alu = this.paint(0x4e555c, 0.46, 0.62, false);
+    const x = this.rearMm;
+    const bell = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 1.2, dims.bore * 1.05, dims.bore * 0.62, 22)), alu);
+    bell.rotation.z = Math.PI / 2;
+    bell.position.set(x + dims.bore * 0.05, 0, 0);
+    bell.userData.part = "Çan muhafaza";
+    const casing = new THREE.Mesh(this.track(new THREE.BoxGeometry(dims.bore * 1.85, dims.bore * 1.2, dims.bore * 1.15)), this.paint(0x3c4148, 0.5, 0.55, false));
+    casing.position.set(x + dims.bore * 1.25, -dims.bore * 0.08, 0);
+    casing.userData.part = "Şanzıman";
+    const sump = new THREE.Mesh(this.track(new THREE.BoxGeometry(dims.bore * 1.2, dims.bore * 0.28, dims.bore * 0.7)), this.paint(0x2e3238, 0.55, 0.4, false));
+    sump.position.set(x + dims.bore * 1.15, -dims.bore * 0.7, 0);
+    this.root.add(bell, casing, sump);
+  }
+
+  private buildServiceCover(dims: Dims): void {
+    const plastic = this.paint(0x16181c, 0.78, 0.04, false);
+    const cover = new THREE.Mesh(
+      this.track(new THREE.BoxGeometry(this.blockMm * 0.92, dims.bore * 0.12, dims.bore * 0.95)),
+      plastic,
+    );
+    cover.position.set(0, dims.deck + dims.headH * 1.05, 0);
+    cover.userData.part = "Motor kapağı";
+    this.boltRow(cover, 4, this.blockMm * 0.35, dims.bore * 0.32, dims.bore * 0.08);
+    const cap = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.09, dims.bore * 0.1, 8, 12)), this.metal(0xd7c07a, 0.35));
+    cap.position.set(this.blockMm * 0.22, dims.bore * 0.08, dims.bore * 0.12);
+    cap.userData.part = "Yağ kapağı";
+    const stick = new THREE.Mesh(this.track(new THREE.CylinderGeometry(2.2, 2.2, dims.bore * 0.55, 8)), this.plain(0xf0c040, 0.45, 0.1));
+    stick.position.set(-this.blockMm * 0.28, dims.bore * 0.2, -dims.bore * 0.35);
+    stick.rotation.z = 0.4;
+    stick.userData.part = "Yağ çubuğu";
+    cover.add(cap, stick);
+    this.serviceCover = cover;
+    this.hideInCut.push(cover);
+    this.root.add(cover);
   }
 
   private buildTurbo(dims: Dims): void {
@@ -980,6 +1068,7 @@ export class EngineAssembly {
     g.add(vanes, gate);
     this.vgt = vanes;
     this.root.add(g);
+    this.showInCut.push(g);
     this.label("Turbo", g, 0, dims.bore * 0.45, 0);
 
     for (const bank of this.banks) {
@@ -1315,7 +1404,8 @@ export class EngineAssembly {
   private flow(sim: Simulation, dt: number, cyl: LiveCyl, liftIn: number, liftEx: number): void {
     if (sim.rpm < 200) return;
     const bank = this.bankOf(cyl);
-    if (liftEx > 0.12) {
+    const baySmoke = sim.smoke !== "none" || sim.gasket || sim.turboFail || sim.rodStage > 0;
+    if (liftEx > 0.12 && baySmoke) {
       const n = this.count(dt * (16 + sim.throttle * 50) * liftEx);
       const smoke = sim.gasket ? COL_WHITE : sim.turboFail ? COL_BLUE : sim.throttle > 0.45 ? COL_HOT : COL_EXH;
       for (let i = 0; i < n; i++) {
@@ -1334,22 +1424,7 @@ export class EngineAssembly {
         );
       }
     }
-    if (liftIn > 0.12 && sim.throttle > 0.05) {
-      const n = this.count(dt * 30 * liftIn * sim.throttle);
-      for (let i = 0; i < n; i++) {
-        const p = cyl.intakePort.clone().applyQuaternion(bank.q).addScaledVector(cyl.intakeDir, 30);
-        this.particles.spawn(
-          p.x, p.y, p.z,
-          -cyl.intakeDir.x * 700,
-          -cyl.intakeDir.y * 500,
-          -cyl.intakeDir.z * 700,
-          COL_AIR,
-          1.1,
-          0.45,
-          0,
-        );
-      }
-    }
+    void liftIn;
   }
 
   private burst(at: THREE.Vector3, dir: THREE.Vector3, color: THREE.Color, n: number): void {

@@ -66,6 +66,13 @@ hands.bind(() => studio.engineRoot(), () => studio.garageGroup());
 hands.onTool = (tool) => studio.showTool(tool);
 (window as unknown as { __krankUnscrew?: (part: string) => string }).__krankUnscrew = (part) => hands.unscrew(part);
 document.querySelector("#hood")?.addEventListener("click", () => studio.toggleHood());
+document.querySelector("#cover-toggle")?.addEventListener("click", (ev) => {
+  const btn = ev.currentTarget as HTMLButtonElement;
+  const on = btn.getAttribute("aria-pressed") !== "true";
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  btn.classList.toggle("on", on);
+  studio.engineRoot()?.setCover(on);
+});
 document.querySelector("#hands-toggle")?.addEventListener("click", () => {
   const on = document.body.classList.toggle("hands");
   const tools = document.querySelector("#tools") as HTMLElement | null;
