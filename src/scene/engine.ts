@@ -1059,19 +1059,32 @@ export class EngineAssembly {
   }
 
   private buildGearbox(dims: Dims): void {
-    const alu = this.paint(0x4e555c, 0.46, 0.62, false);
+    const alu = this.paint(0x6a7278, 0.48, 0.72, false);
     const x = this.rearMm;
-    const bell = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 1.2, dims.bore * 1.05, dims.bore * 0.62, 22)), alu);
+    const bell = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 1.25, dims.bore * 0.95, dims.bore * 0.7, 24)), alu);
     bell.rotation.z = Math.PI / 2;
-    bell.position.set(x + dims.bore * 0.05, 0, 0);
+    bell.position.set(x + dims.bore * 0.08, 0, 0);
     bell.userData.part = "Çan muhafaza";
-    const casing = new THREE.Mesh(this.track(new THREE.BoxGeometry(dims.bore * 1.85, dims.bore * 1.2, dims.bore * 1.15)), this.paint(0x3c4148, 0.5, 0.55, false));
-    casing.position.set(x + dims.bore * 1.25, -dims.bore * 0.08, 0);
+    const casing = new THREE.Mesh(this.track(new THREE.BoxGeometry(dims.bore * 1.7, dims.bore * 1.05, dims.bore * 0.95)), this.paint(0x5c656c, 0.46, 0.7, false));
+    casing.position.set(x + dims.bore * 1.2, -dims.bore * 0.05, 0);
     casing.userData.part = "Şanzıman";
-    const sump = new THREE.Mesh(this.track(new THREE.BoxGeometry(dims.bore * 1.2, dims.bore * 0.28, dims.bore * 0.7)), this.paint(0x2e3238, 0.55, 0.4, false));
-    sump.position.set(x + dims.bore * 1.15, -dims.bore * 0.7, 0);
+    const sump = new THREE.Mesh(this.track(new THREE.BoxGeometry(dims.bore * 1.15, dims.bore * 0.22, dims.bore * 0.62)), this.paint(0x3e4448, 0.55, 0.45, false));
+    sump.position.set(x + dims.bore * 1.1, -dims.bore * 0.62, 0);
+    const ribs: THREE.Object3D[] = [bell, casing, sump];
+    for (let i = 0; i < 5; i++) {
+      const rib = new THREE.Mesh(this.track(new THREE.BoxGeometry(dims.bore * 1.55, dims.bore * 0.04, dims.bore * 0.04)), alu);
+      rib.position.set(x + dims.bore * 1.2, -dims.bore * 0.35 + i * dims.bore * 0.16, dims.bore * 0.48);
+      ribs.push(rib);
+    }
+    for (let i = 0; i < 6; i++) {
+      const bolt = new THREE.Mesh(this.track(new THREE.CylinderGeometry(dims.bore * 0.045, dims.bore * 0.045, dims.bore * 0.06, 6)), this.metal(0xc5b48a, 0.32));
+      const a = (i / 6) * Math.PI * 2;
+      bolt.rotation.z = Math.PI / 2;
+      bolt.position.set(x + dims.bore * 0.42, Math.cos(a) * dims.bore * 0.85, Math.sin(a) * dims.bore * 0.85);
+      ribs.push(bolt);
+    }
     const box = new THREE.Group();
-    box.add(bell, casing, sump);
+    box.add(...ribs);
     this.gearbox = box;
     this.root.add(box);
   }

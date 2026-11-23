@@ -33,7 +33,7 @@ export async function loadK24Scan(phone: boolean): Promise<K24Scan> {
     /* indeksli haliyle devam */
   }
   if (!geo.getAttribute("normal")) geo.computeVertexNormals();
-  bakeCavity(geo);
+  if (!geo.getAttribute("color")) bakeCavity(geo);
   if (!geo.getAttribute("color")) {
     const pos = geo.getAttribute("position");
     const ao = new Float32Array(pos.count * 3);
@@ -115,11 +115,11 @@ function k24Material(
   heightM: number,
 ): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    metalness: 0.55,
+    color: 0xb7b7b7,
+    metalness: 0.42,
     vertexColors: true,
-    envMapIntensity: 1.25,
-    roughness: 0.55,
+    envMapIntensity: 0.42,
+    roughness: 0.78,
   });
   mat.customProgramCacheKey = () => "k24-triplanar";
   mat.onBeforeCompile = (shader) => {
@@ -161,18 +161,22 @@ function k24Material(
         {
           vec3 n = normalize(vLNor);
           vec3 iron = tri(tIron, vWPos, n, triScale);
-          vec3 alu = tri(tAlu, vWPos, n, triScale * 1.4);
-          float roughTex = tri(tIronR, vWPos, n, triScale).r;
+          vec3 alu = tri(tAlu, vWPos, n, triScale * 1.6);
           float h = clamp(vLPos.y / uHeight, 0.0, 1.0);
-          vec3 metal = mix(vec3(0.72), iron, 0.45);
-          metal = mix(metal, alu, smoothstep(0.55, 0.9, abs(n.y)) * 0.25);
-          vec3 tint = mix(vec3(0.62, 0.60, 0.56), vec3(0.92, 0.90, 0.86), smoothstep(0.15, 0.5, h));
-          tint = mix(tint, vec3(0.28, 0.28, 0.30), smoothstep(0.7, 0.88, h));
-          float pulley = smoothstep(0.5, 0.9, abs(n.x)) * (1.0 - smoothstep(0.68, 0.9, h));
-          tint = mix(tint, vec3(0.55, 0.56, 0.58), pulley);
-          float ao = clamp(vColor.r, 0.55, 1.0);
-          float grime = mix(0.9, 1.0, smoothstep(0.0, 0.3, h));
-          diffuseColor.rgb *= metal * tint * ao * grime * mix(0.92, 1.08, roughTex);
+          vec3 tint = vec3(0.28, 0.27, 0.25);
+          tint = mix(tint, vec3(0.48, 0.49, 0.50), smoothstep(0.42, 0.62, h));
+          tint = mix(tint, vec3(0.10, 0.10, 0.11), smoothstep(0.72, 0.86, h));
+          float pulley = smoothstep(0.55, 0.92, abs(n.x)) * (1.0 - smoothstep(0.7, 0.9, h));
+          float belt = smoothstep(0.72, 0.95, abs(n.x)) * smoothstep(0.15, 0.35, h) * (1.0 - smoothstep(0.55, 0.7, h));
+          tint = mix(tint, vec3(0.16, 0.16, 0.17), pulley);
+          tint = mix(tint, vec3(0.03, 0.03, 0.03), belt);
+          vec3 tex = mix(iron, alu, smoothstep(0.5, 0.75, h) * 0.55);
+          float stain = sin(vLPos.x * 37.0) * sin(vLPos.z * 23.0 + vLPos.y * 11.0);
+          float oil = smoothstep(0.35, 0.8, stain) * smoothstep(0.18, 0.4, h) * (1.0 - smoothstep(0.7, 0.88, h));
+          tint = mix(tint, tint * vec3(0.42, 0.38, 0.28), oil * 0.7);
+          float ao = clamp(vColor.r, 0.22, 1.0);
+          float cavity = mix(0.62, 1.0, smoothstep(-0.15, 0.55, n.y));
+          diffuseColor.rgb *= tex * tint * ao * cavity;
         }`,
       );
   };

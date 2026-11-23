@@ -146,7 +146,7 @@ export class Studio {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
     this.controls.maxPolarAngle = Math.PI * 0.49;
-    this.controls.minDistance = 0.8;
+    this.controls.minDistance = 2.35;
     this.controls.maxDistance = 28;
     this.controls.target.copy(this.center);
     this.controls.addEventListener("start", () => {

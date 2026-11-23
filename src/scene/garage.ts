@@ -245,41 +245,70 @@ export class Garage {
     const insulation = add(new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.4, 0.015), new THREE.MeshStandardMaterial({ color: 0x3a342c, roughness: 0.95 })));
     insulation.position.set(0, 0.08, -0.43);
 
-    const rad = add(new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.42, 0.045), new THREE.MeshStandardMaterial({ color: 0x22262b, roughness: 0.45, metalness: 0.55 })), "Radyatör");
-    rad.position.set(0, 0.06, 0.58);
-    const fan = add(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.04, 20), plastic));
+    const coreMat = new THREE.MeshStandardMaterial({ color: 0x1a1e22, roughness: 0.55, metalness: 0.35 });
+    const rad = add(new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.36, 0.028), coreMat), "Radyatör");
+    rad.position.set(0, 0.04, 0.56);
+    for (let i = 0; i < 14; i++) {
+      const fin = add(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.004, 0.034), new THREE.MeshStandardMaterial({ color: 0x3a4046, roughness: 0.4, metalness: 0.7 })));
+      fin.position.set(0, -0.12 + i * 0.024, 0.56);
+    }
+    for (const side of [-1, 1]) {
+      const tank = add(new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.38, 0.05), plastic));
+      tank.position.set(side * 0.33, 0.04, 0.56);
+    }
+    const shroud = add(new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.32, 0.012), plastic));
+    shroud.position.set(0, 0.04, 0.53);
+    const fan = add(new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.025, 18), plastic));
     fan.rotation.x = Math.PI / 2;
-    fan.position.set(0.05, -0.02, 0.56);
-    for (let i = 0; i < 6; i++) {
-      const blade = add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.14, 0.008), plastic));
-      const a = (i / 6) * Math.PI * 2;
-      blade.position.set(0.05 + Math.cos(a) * 0.08, -0.02 + Math.sin(a) * 0.08, 0.55);
-      blade.rotation.z = a;
-    }
-    const hose = (y0: number, name: string) => {
-      const h = add(new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.42, 8), rubber), name);
+    fan.position.set(0.02, 0.04, 0.515);
+    const hose = (x: number, y0: number, z: number, len: number, name: string) => {
+      const h = add(new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, len, 10), rubber), name);
       h.rotation.x = Math.PI / 2;
-      h.position.set(-0.22, y0, 0.38);
+      h.position.set(x, y0, z);
+      const clamp = add(new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.003, 6, 10), steel));
+      clamp.rotation.y = Math.PI / 2;
+      clamp.position.set(x, y0, z - len * 0.35);
     };
-    hose(0.12, "Üst hortum");
-    hose(-0.12, "Alt hortum");
-    const manifold = add(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.1, 0.08), new THREE.MeshStandardMaterial({ color: 0x3a342e, roughness: 0.62, metalness: 0.55 })), "Egzoz manifoldu");
-    manifold.position.set(0.02, 0.02, 0.28);
-    const shield = add(new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.16, 0.012), new THREE.MeshStandardMaterial({ color: 0x6a6458, roughness: 0.7, metalness: 0.4 })), "Isı kalkanı");
-    shield.position.set(0.02, 0.04, 0.33);
+    hose(-0.18, 0.16, 0.36, 0.36, "Üst hortum");
+    hose(-0.18, -0.08, 0.36, 0.34, "Alt hortum");
+    const maniMat = new THREE.MeshStandardMaterial({ color: 0x2c2824, roughness: 0.58, metalness: 0.62 });
     for (let i = 0; i < 4; i++) {
-      const runner = add(new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.018, 0.12, 8), steel));
-      runner.rotation.x = Math.PI / 2;
-      runner.position.set(-0.16 + i * 0.11, 0.06, 0.2);
+      const runner = add(new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 0.14, 8), maniMat), "Egzoz manifoldu");
+      runner.rotation.x = 0.5;
+      runner.position.set(-0.16 + i * 0.11, 0.04, 0.22);
     }
+    const log = add(new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.42, 10), maniMat));
+    log.rotation.z = Math.PI / 2;
+    log.position.set(0.0, 0.0, 0.3);
+    const shieldMat = new THREE.MeshStandardMaterial({ color: 0x5a564c, roughness: 0.62, metalness: 0.45 });
+    const shield = add(new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.18, 0.006), shieldMat), "Isı kalkanı");
+    shield.position.set(0.0, 0.05, 0.34);
+    for (let i = 0; i < 6; i++) {
+      const rib = add(new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.008, 0.012), shieldMat));
+      rib.position.set(0, -0.02 + i * 0.028, 0.346);
+    }
+    const belt = add(new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.008, 8, 20), rubber), "Aksesuar kayışı");
+    belt.rotation.y = Math.PI / 2;
+    belt.position.set(-0.34, 0.02, 0.04);
+    const cover = add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.28, 0.26), plastic), "Triger kapağı");
+    cover.position.set(-0.36, 0.04, 0.02);
 
     const air = add(new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.2, 0.22), plastic), "Hava filtresi kutusu");
     air.position.set(-0.48, 0.02, -0.12);
     const lid = add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.03, 0.24), new THREE.MeshStandardMaterial({ color: 0x2a2e32, roughness: 0.6 })), "Hava filtresi kapağı");
     lid.position.set(-0.48, 0.13, -0.12);
-    const duct = add(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.36, 8), rubber), "Emme hortumu");
+    const duct = add(new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.038, 0.28, 10), rubber), "Emme hortumu");
     duct.rotation.z = Math.PI / 2;
-    duct.position.set(-0.22, 0.08, -0.18);
+    duct.rotation.y = 0.4;
+    duct.position.set(-0.28, 0.1, -0.08);
+    const duct2 = add(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.032, 0.16, 10), rubber));
+    duct2.rotation.x = 0.9;
+    duct2.position.set(-0.12, 0.16, -0.02);
+    for (let i = 0; i < 8; i++) {
+      const seg = add(new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.07, 7), rubber));
+      seg.rotation.z = Math.PI / 2;
+      seg.position.set(-0.28 + i * 0.07, 0.3, -0.02);
+    }
 
     const battery = new THREE.Group();
     battery.position.set(0.46, -0.06, -0.22);
@@ -313,12 +342,27 @@ export class Garage {
     const reservoir = add(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, 0.05), new THREE.MeshStandardMaterial({ color: 0xd7e2dc, roughness: 0.25, transparent: true, opacity: 0.8 })), "Fren hidroliği");
     reservoir.position.set(-0.12, 0.22, -0.38);
 
+    const bodyPaint = new THREE.MeshStandardMaterial({ color: 0x163044, roughness: 0.42, metalness: 0.08 });
     for (const x of [-0.55, 0.58]) {
-      const tower = add(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 0.42, 12), steel), "Amortisör kulesi");
-      tower.position.set(x, 0.12, 0.38);
-      const liner = add(new THREE.Mesh(new THREE.SphereGeometry(0.36, 18, 12, 0, Math.PI, 0.2, 1.4), plastic), "Çamurluk davlumbazı");
-      liner.scale.set(0.45, 0.9, 1);
-      liner.position.set(x * 1.15, -0.08, 0.02);
+      const tower = add(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 0.22, 16, 1, true), bodyPaint), "Amortisör kulesi");
+      tower.position.set(x, 0.02, 0.36);
+      const plate = add(new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.012, 12), steel));
+      plate.position.set(x, 0.14, 0.36);
+      const rod = add(new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.16, 8), steel));
+      rod.position.set(x, 0.06, 0.36);
+      for (let i = 0; i < 6; i++) {
+        const coil = add(new THREE.Mesh(new THREE.TorusGeometry(0.038, 0.005, 6, 12), steel));
+        coil.rotation.x = Math.PI / 2;
+        coil.position.set(x, -0.02 + i * 0.018, 0.36);
+      }
+      for (let s = 0; s < 3; s++) {
+        const a = (s / 3) * Math.PI * 2;
+        const stud = add(new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.028, 6), steel));
+        stud.position.set(x + Math.cos(a) * 0.04, 0.155, 0.36 + Math.sin(a) * 0.04);
+      }
+      const liner = add(new THREE.Mesh(new THREE.SphereGeometry(0.34, 16, 10, 0, Math.PI, 0.25, 1.2), plastic), "Çamurluk davlumbazı");
+      liner.scale.set(0.42, 0.85, 1);
+      liner.position.set(x * 1.12, -0.06, 0.02);
     }
 
     const loom = add(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.7, 7), rubber), "Kablo demeti");
@@ -345,7 +389,7 @@ export class Garage {
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.set(0, -0.155, 0.02);
     this.bay.add(shadow);
-    const lamp = new THREE.PointLight(0xfff6ea, 1.8, 2.6, 2);
+    const lamp = new THREE.PointLight(0xfff2e0, 0.65, 2.2, 2);
     lamp.position.set(0.05, 0.46, 0.2);
     this.bay.add(lamp);
   }
