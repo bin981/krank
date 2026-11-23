@@ -54,7 +54,7 @@ export async function loadK24Scan(phone: boolean): Promise<K24Scan> {
   const box = new THREE.Box3().setFromObject(gltf.scene);
   const size = box.getSize(new THREE.Vector3());
   const long = Math.max(size.x, size.z);
-  const scale = 0.62 / Math.max(0.2, long);
+  const scale = 0.74 / Math.max(0.2, long);
   gltf.scene.scale.setScalar(scale);
   if (size.z > size.x) gltf.scene.rotation.y = Math.PI / 2;
   gltf.scene.updateWorldMatrix(true, true);

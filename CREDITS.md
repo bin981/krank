@@ -2,7 +2,7 @@
 
 Bu sayfa `CREDITS.md` dosyasından üretilir. Aşağıdaki liste arşivdeki kaynakların tamamıdır.
 Yayındaki dosyalar: `family-sedan.glb`, atölye GLB'leri (bina, lift, takım dolabı, hurda tezgâh, vinç),
-el aletleri (cırcır, kombine anahtar, multimetre, çanta, yağdanlık), Honda K24Z3 motor taraması, Poly Haven `auto_service` 1k/2k,
+el aletleri (cırcır, kombine anahtar, multimetre, çanta, yağdanlık), Honda K24Z3 motor taraması, akü, Toyota alternatörü, Poly Haven `auto_service` 1k/2k,
 ambientCG / Poly Haven 1k PBR dokular ve `sounds/` altındaki döngüler ile seçilmiş marş kayıtları.
 CC BY-SA marş kayıtları (`saab_900_16v_turbo_cold_start`) değiştirilmeden durur.
 Döngülerin uç örnek adımı dosyanın kendi dalga şekliyle aynı mertebededir; ek kesme yapılmadı.
@@ -10,7 +10,7 @@ Döngülerin uç örnek adımı dosyanın kendi dalga şekliyle aynı mertebeded
 
 Every file in this folder may be redistributed in a public GitHub repo. Licenses are CC0 1.0, CC BY 3.0/4.0 or CC BY-SA 3.0/4.0. There is no NonCommercial or editorial-only content.
 CC BY / BY-SA items **must be credited** in the app's About page and in the repo. The text below is enough for that.
-CC BY-SA items (marked **SA**) must stay under BY-SA if you modify and redistribute them. That covers the K24Z3 scan and the marked audio files, not the KRANK code.
+CC BY-SA items (marked **SA**) must stay under BY-SA if you modify and redistribute them. That covers the K24Z3 scan, the Toyota alternator, and the marked audio files, not the KRANK code.
 
 ## 3D models
 
@@ -31,6 +31,8 @@ CC BY-SA items (marked **SA**) must stay under BY-SA if you modify and redistrib
 | models/props/metal_toolbox.glb | https://polyhaven.com/a/metal_toolbox | Mateusz Sadek (Poly Haven) | CC0 1.0 (https://polyhaven.com/license) |
 | models/props/old_tyre.glb | https://polyhaven.com/a/old_tyre | MP (Poly Haven) | CC0 1.0 (https://polyhaven.com/license) |
 | models/engines/honda_k24z3_scan_280k_clean.glb and honda_k24z3_scan_120k_clean.glb | https://www.printables.com/model/1339398 | Davidss (Printables) | CC BY-SA 4.0 **SA** (https://creativecommons.org/licenses/by-sa/4.0/). Modified: 3MF to GLB, holes closed, shreds removed, decimated to 280k/120k, per-vertex AO in COLOR_0, metres, meshopt. This derivative stays CC BY-SA 4.0. |
+| models/bay/car_battery_cc-by.glb | https://www.printables.com/model/640072 | Guilherme Joenck (Printables) | CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Modified: STL to GLB, millimetres to metres, base at y=0, case and terminal materials, meshopt. |
+| models/bay/alternator_toyota_cc-by-sa.glb | https://www.printables.com/model/1893952 | uz_ketle (Printables) | CC BY-SA 4.0 **SA** (https://creativecommons.org/licenses/by-sa/4.0/). Modified: decimated from 4.26M to 80k triangles, centimetres to metres, Y-up, base at y=0, aluminium material, meshopt. This derivative stays CC BY-SA 4.0. |
 
 ## Textures and HDRIs
 
@@ -46,6 +48,9 @@ CC BY-SA items (marked **SA**) must stay under BY-SA if you modify and redistrib
 | textures/worn_concrete_floor/ | garage floor | https://polyhaven.com/a/worn_concrete_floor | Dimitrios Savva (Poly Haven) | CC0 1.0 (https://polyhaven.com/license) |
 | textures/smooth_concrete_floor/ | garage floor | https://polyhaven.com/a/smooth_concrete_floor | Dimitrios Savva (Poly Haven) | CC0 1.0 (https://polyhaven.com/license) |
 | textures/hdri/auto_service_*.hdr | car-service garage HDRI (lighting + background) | https://polyhaven.com/a/auto_service | Sergej Majboroda (Poly Haven) | CC0 1.0 (https://polyhaven.com/license) |
+| textures/bay/PaintedMetal014/ | grimy painted metal (firewall, bay aprons) | https://ambientcg.com/view?id=PaintedMetal014 | ambientCG (Lennart Demes) | CC0 1.0 (https://docs.ambientcg.com/license/) |
+| textures/bay/blue_metal_plate/ | painted metal (strut towers, inner fenders) | https://polyhaven.com/a/blue_metal_plate | Poly Haven | CC0 1.0 (https://polyhaven.com/license) |
+| textures/bay/SurfaceImperfections008/ | grime overlay on bay metal | https://ambientcg.com/view?id=SurfaceImperfections008 | ambientCG (Lennart Demes) | CC0 1.0 (https://docs.ambientcg.com/license/) |
 | textures/hdri/autoshop_01_*.hdr | auto workshop HDRI | https://polyhaven.com/a/autoshop_01 | Oliksiy Yakovlyev (Poly Haven) | CC0 1.0 (https://polyhaven.com/license) |
 
 ## Audio
