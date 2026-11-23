@@ -4,6 +4,7 @@ import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import type { EngineAssembly } from "./engine";
 import { loadPbr, paintMaterial, type MapSet } from "./pbr";
+import { loadK24Scan } from "./k24";
 
 /**
  * Gerçek atölye ve aile sedanı. Motor, kaputtaki yer tutucu kutunun yerine oturur.
@@ -18,6 +19,9 @@ export class Garage {
   private baySize = new THREE.Vector3(1.15, 0.62, 0.78);
   private ready = false;
   private pending: EngineAssembly | null = null;
+  private k24Task: Promise<void> | null = null;
+  private k24Root: THREE.Object3D | null = null;
+  private k24Height = 0.55;
   private readonly tools = new Map<string, THREE.Object3D>();
   private activeTool = "10";
   benchTop = new THREE.Vector3(3.2, 0.92, -1.2);
@@ -166,6 +170,7 @@ export class Garage {
     const engine = this.pending;
     if (!engine) return;
     this.bay.clear();
+    if (this.k24Root) this.bay.add(this.k24Root);
     engine.root.traverse((obj) => {
       if (obj.userData.stand) obj.visible = false;
     });
@@ -177,6 +182,37 @@ export class Garage {
     engine.root.position.set(-0.06, 0, 0.02);
     engine.basePos.copy(engine.root.position);
     this.fillBay();
+    this.ensureScan(engine);
+  }
+
+  private ensureScan(engine: EngineAssembly): void {
+    const phone = window.matchMedia("(max-width: 840px)").matches;
+    if (!this.k24Task) {
+      this.k24Task = loadK24Scan(phone).then((scan) => {
+        scan.object.position.set(-0.02, -0.17, 0.02);
+        this.bay.add(scan.object);
+        this.k24Root = scan.object;
+        this.k24Height = scan.height;
+        (this.pending ?? engine).attachScan(scan.object, scan.object.position.clone(), scan.height);
+        const stand = scan.object.clone(true);
+        stand.traverse((obj) => {
+          const mesh = obj as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          const mat = mesh.material as THREE.MeshStandardMaterial;
+          if (mat?.clippingPlanes) {
+            mesh.material = mat.clone();
+            (mesh.material as THREE.MeshStandardMaterial).clippingPlanes = [];
+          }
+        });
+        stand.position.set(0.45, 0.92, -3.15);
+        stand.rotation.y += 0.8;
+        this.group.add(stand);
+      }).catch((err) => {
+        console.error("K24 taraması yüklenemedi.", err);
+      });
+    } else if (this.k24Root) {
+      engine.attachScan(this.k24Root, this.k24Root.position.clone(), this.k24Height);
+    }
   }
 
   private fillBay(): void {
@@ -227,6 +263,15 @@ export class Garage {
     };
     hose(0.12, "Üst hortum");
     hose(-0.12, "Alt hortum");
+    const manifold = add(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.1, 0.08), new THREE.MeshStandardMaterial({ color: 0x3a342e, roughness: 0.62, metalness: 0.55 })), "Egzoz manifoldu");
+    manifold.position.set(0.02, 0.02, 0.28);
+    const shield = add(new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.16, 0.012), new THREE.MeshStandardMaterial({ color: 0x6a6458, roughness: 0.7, metalness: 0.4 })), "Isı kalkanı");
+    shield.position.set(0.02, 0.04, 0.33);
+    for (let i = 0; i < 4; i++) {
+      const runner = add(new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.018, 0.12, 8), steel));
+      runner.rotation.x = Math.PI / 2;
+      runner.position.set(-0.16 + i * 0.11, 0.06, 0.2);
+    }
 
     const air = add(new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.2, 0.22), plastic), "Hava filtresi kutusu");
     air.position.set(-0.48, 0.02, -0.12);
@@ -300,6 +345,9 @@ export class Garage {
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.set(0, -0.155, 0.02);
     this.bay.add(shadow);
+    const lamp = new THREE.PointLight(0xfff6ea, 1.8, 2.6, 2);
+    lamp.position.set(0.05, 0.46, 0.2);
+    this.bay.add(lamp);
   }
 
   private dress(root: THREE.Object3D): void {

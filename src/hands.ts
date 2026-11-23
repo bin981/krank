@@ -68,6 +68,7 @@ export class Hands {
   }
 
   onTool: (tool: Tool) => void = () => {};
+  onPart: (part: string, removed: boolean) => void = () => {};
 
   setTray(point: THREE.Vector3): void {
     this.tray.position.copy(point);
@@ -145,6 +146,7 @@ export class Hands {
     object.rotation.set(0.2, 0.4, 0);
     this.removed.push({ object, parent, position, quaternion, job });
     this.message = `${job.part} tepside. Yerine takmak için tekrar dokun.`;
+    this.onPart(job.part, true);
     if (job.fixes === "misfire") {
       this.sim.misfireCyl = -1;
       if (this.sim.scenarioId === "misfire-coil") this.sim.setScenario("none");
@@ -168,6 +170,7 @@ export class Hands {
     this.removed = this.removed.filter((r) => r !== item);
     this.bolts.set(item.job.part, item.job.bolts);
     this.message = `${item.job.part} yerine takıldı.`;
+    this.onPart(item.job.part, false);
     if (item.job.fixes === "battery") this.sim.batteryWeak = false;
   }
 

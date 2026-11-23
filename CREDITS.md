@@ -2,7 +2,7 @@
 
 Bu sayfa `CREDITS.md` dosyasından üretilir. Aşağıdaki liste arşivdeki kaynakların tamamıdır.
 Yayındaki dosyalar: `family-sedan.glb`, atölye GLB'leri (bina, lift, takım dolabı, hurda tezgâh, vinç),
-el aletleri (cırcır, kombine anahtar, multimetre, çanta, yağdanlık), Poly Haven `auto_service` 1k/2k,
+el aletleri (cırcır, kombine anahtar, multimetre, çanta, yağdanlık), Honda K24Z3 motor taraması, Poly Haven `auto_service` 1k/2k,
 ambientCG / Poly Haven 1k PBR dokular ve `sounds/` altındaki döngüler ile seçilmiş marş kayıtları.
 CC BY-SA marş kayıtları (`saab_900_16v_turbo_cold_start`) değiştirilmeden durur.
 Döngülerin uç örnek adımı dosyanın kendi dalga şekliyle aynı mertebededir; ek kesme yapılmadı.
@@ -30,6 +30,7 @@ CC BY-SA items (marked **SA**) must stay under BY-SA if you modify and redistrib
 | models/props/ratchet_wrench.glb | https://polyhaven.com/a/ratchet_wrench | John Hutcheson (Poly Haven) | CC0 1.0 (https://polyhaven.com/license) |
 | models/props/metal_toolbox.glb | https://polyhaven.com/a/metal_toolbox | Mateusz Sadek (Poly Haven) | CC0 1.0 (https://polyhaven.com/license) |
 | models/props/old_tyre.glb | https://polyhaven.com/a/old_tyre | MP (Poly Haven) | CC0 1.0 (https://polyhaven.com/license) |
+| models/engines/honda_k24z3_scan_280k.glb and honda_k24z3_scan_120k.glb | https://www.printables.com/model/1339398 | Davidss (Printables) | CC BY-SA 4.0 **SA** (https://creativecommons.org/licenses/by-sa/4.0/). Modified: 3MF to GLB, decimated, levelled, centred, metres, meshopt. This asset stays CC BY-SA 4.0. |
 
 ## Textures and HDRIs
 

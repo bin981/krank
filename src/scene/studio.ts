@@ -51,6 +51,7 @@ export class Studio {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 0.78;
+    this.renderer.localClippingEnabled = true;
     this.renderer.shadowMap.enabled = !graphics.lite;
     if (!graphics.lite) this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 

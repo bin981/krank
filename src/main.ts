@@ -64,6 +64,9 @@ const workshop = new Workshop(sim);
 const hands = new Hands(studio.scene, sim);
 hands.bind(() => studio.engineRoot(), () => studio.garageGroup());
 hands.onTool = (tool) => studio.showTool(tool);
+hands.onPart = (part, removed) => {
+  if (part === "Supap kapağı") studio.engineRoot()?.setCoverClip(removed);
+};
 (window as unknown as { __krankUnscrew?: (part: string) => string }).__krankUnscrew = (part) => hands.unscrew(part);
 document.querySelector("#hood")?.addEventListener("click", () => studio.toggleHood());
 document.querySelector("#cover-toggle")?.addEventListener("click", (ev) => {

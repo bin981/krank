@@ -97,6 +97,17 @@ export class EngineAssembly {
     this.coverOn = on;
     if (this.serviceCover) this.serviceCover.visible = on;
   }
+
+  setCoverClip(on: boolean): void {
+    this.coverClip = on;
+  }
+
+  attachScan(scan: THREE.Object3D, base: THREE.Vector3, height: number): void {
+    this.scan = scan;
+    this.scanBase.copy(base);
+    this.scanHeight = height;
+    this.collectShell();
+  }
   blockMm = 0;
   frontMm = 0;
   rearMm = 0;
@@ -104,6 +115,13 @@ export class EngineAssembly {
   private readonly chunks: Chunk[] = [];
   private readonly particles = new ParticleField();
   private readonly crank: THREE.Group;
+  private gearbox: THREE.Group | null = null;
+  private readonly shell: THREE.Object3D[] = [];
+  scan: THREE.Object3D | null = null;
+  private scanBase = new THREE.Vector3();
+  private scanHeight = 0.55;
+  private coverClip = false;
+  private readonly clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
   private readonly belt: THREE.Group;
   private readonly gasketMat: THREE.MeshStandardMaterial;
   private readonly exhaustMat: THREE.MeshStandardMaterial;
@@ -165,6 +183,7 @@ export class EngineAssembly {
       seen.add(mesh.geometry);
       boxProject(mesh.geometry);
     });
+    this.collectShell();
   }
 
   refreshBadge(): void {
@@ -381,7 +400,69 @@ export class EngineAssembly {
     for (const obj of this.hideInCut) obj.visible = !cut;
     for (const obj of this.showInCut) obj.visible = internals;
     if (this.serviceCover) this.serviceCover.visible = this.coverOn && !cut;
+    this.revealScan(internals, cut);
     this.setXray(view.mode === "xray");
+  }
+
+  private collectShell(): void {
+    if (this.shell.length) return;
+    const skip = new Set<THREE.Object3D>();
+    const mark = (obj: THREE.Object3D | null) => {
+      if (!obj) return;
+      obj.traverse((child) => skip.add(child));
+      skip.add(obj);
+    };
+    mark(this.crank);
+    mark(this.belt);
+    mark(this.gearbox);
+    mark(this.serviceCover);
+    for (const bank of this.banks) for (const cam of bank.cams) mark(cam);
+    for (const cyl of this.cyls) {
+      mark(cyl.piston);
+      mark(cyl.rod.pivot);
+      mark(cyl.intake);
+      mark(cyl.exhaust);
+      mark(cyl.glow);
+    }
+    this.root.traverse((obj) => {
+      if (obj.userData.part === "Bobin" || obj.userData.part === "Isı kalkanı") mark(obj);
+    });
+    this.root.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh || skip.has(mesh)) return;
+      this.shell.push(mesh);
+    });
+  }
+
+  private revealScan(internals: boolean, cut: boolean): void {
+    if (!this.scan) return;
+    this.scan.position.copy(this.scanBase).add(this.root.position).sub(this.basePos);
+    const showMech = internals;
+    this.scan.visible = !showMech;
+    for (const mesh of this.shell) mesh.visible = showMech && !cut;
+    this.crank.visible = showMech;
+    this.belt.visible = showMech && !this.frozenCam;
+    for (const cyl of this.cyls) {
+      cyl.piston.visible = showMech;
+      cyl.rod.pivot.visible = showMech;
+      cyl.intake.visible = showMech || this.coverClip;
+      cyl.exhaust.visible = showMech || this.coverClip;
+      if (!showMech) cyl.glow.visible = false;
+    }
+    const cams = showMech || this.coverClip;
+    for (const bank of this.banks) for (const cam of bank.cams) cam.visible = cams;
+    const material = (this.scan.getObjectByName("k24") as THREE.Mesh | undefined)?.material as THREE.MeshStandardMaterial | undefined;
+    if (material) {
+      if (this.coverClip && !showMech) {
+        const p = new THREE.Vector3(0, this.scanHeight * 0.62, 0);
+        this.scan.localToWorld(p);
+        this.clipPlane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, -1, 0), p);
+        material.clippingPlanes = [this.clipPlane];
+        material.clipShadows = true;
+      } else {
+        material.clippingPlanes = [];
+      }
+    }
   }
 
   dispose(): void {
@@ -989,7 +1070,10 @@ export class EngineAssembly {
     casing.userData.part = "Şanzıman";
     const sump = new THREE.Mesh(this.track(new THREE.BoxGeometry(dims.bore * 1.2, dims.bore * 0.28, dims.bore * 0.7)), this.paint(0x2e3238, 0.55, 0.4, false));
     sump.position.set(x + dims.bore * 1.15, -dims.bore * 0.7, 0);
-    this.root.add(bell, casing, sump);
+    const box = new THREE.Group();
+    box.add(bell, casing, sump);
+    this.gearbox = box;
+    this.root.add(box);
   }
 
   private buildServiceCover(dims: Dims): void {
