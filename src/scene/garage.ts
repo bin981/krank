@@ -271,27 +271,6 @@ export class Garage {
     };
     hose(-0.18, 0.16, 0.36, 0.36, "Üst hortum");
     hose(-0.18, -0.08, 0.36, 0.34, "Alt hortum");
-    const maniMat = new THREE.MeshStandardMaterial({ color: 0x2c2824, roughness: 0.58, metalness: 0.62 });
-    for (let i = 0; i < 4; i++) {
-      const runner = add(new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 0.14, 8), maniMat), "Egzoz manifoldu");
-      runner.rotation.x = 0.5;
-      runner.position.set(-0.16 + i * 0.11, 0.04, 0.22);
-    }
-    const log = add(new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.42, 10), maniMat));
-    log.rotation.z = Math.PI / 2;
-    log.position.set(0.0, 0.0, 0.3);
-    const shieldMat = new THREE.MeshStandardMaterial({ color: 0x5a564c, roughness: 0.62, metalness: 0.45 });
-    const shield = add(new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.18, 0.006), shieldMat), "Isı kalkanı");
-    shield.position.set(0.0, 0.05, 0.34);
-    for (let i = 0; i < 6; i++) {
-      const rib = add(new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.008, 0.012), shieldMat));
-      rib.position.set(0, -0.02 + i * 0.028, 0.346);
-    }
-    const belt = add(new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.008, 8, 20), rubber), "Aksesuar kayışı");
-    belt.rotation.y = Math.PI / 2;
-    belt.position.set(-0.34, 0.02, 0.04);
-    const cover = add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.28, 0.26), plastic), "Triger kapağı");
-    cover.position.set(-0.36, 0.04, 0.02);
 
     const air = add(new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.2, 0.22), plastic), "Hava filtresi kutusu");
     air.position.set(-0.48, 0.02, -0.12);
@@ -304,11 +283,6 @@ export class Garage {
     const duct2 = add(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.032, 0.16, 10), rubber));
     duct2.rotation.x = 0.9;
     duct2.position.set(-0.12, 0.16, -0.02);
-    for (let i = 0; i < 8; i++) {
-      const seg = add(new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.07, 7), rubber));
-      seg.rotation.z = Math.PI / 2;
-      seg.position.set(-0.28 + i * 0.07, 0.3, -0.02);
-    }
 
     const battery = new THREE.Group();
     battery.position.set(0.46, -0.06, -0.22);
@@ -329,8 +303,10 @@ export class Garage {
 
     const fuse = add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 0.06), plastic), "Sigorta kutusu");
     fuse.position.set(0.48, 0.16, 0.05);
-    const washer = add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.14, 0.12), new THREE.MeshStandardMaterial({ color: 0x8aa0b0, roughness: 0.28, metalness: 0.02, transparent: true, opacity: 0.72 })), "Cam suyu");
+    const washer = add(new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.06, 0.16, 12), new THREE.MeshStandardMaterial({ color: 0x8aa0b0, roughness: 0.28, metalness: 0.02, transparent: true, opacity: 0.72 })), "Cam suyu");
     washer.position.set(-0.5, -0.02, 0.32);
+    const washerCap = add(new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.02, 10), yellow));
+    washerCap.position.set(-0.5, 0.07, 0.32);
     const bottle = add(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.16, 12), new THREE.MeshStandardMaterial({ color: 0xc5d0c8, roughness: 0.3, transparent: true, opacity: 0.85 })), "Genleşme kabı");
     bottle.position.set(0.5, 0.08, 0.22);
     const cap = add(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.02, 8), yellow));

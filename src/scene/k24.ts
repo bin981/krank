@@ -16,7 +16,7 @@ export async function loadK24Scan(phone: boolean): Promise<K24Scan> {
   await MeshoptDecoder.ready;
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
-  const file = phone ? "honda_k24z3_scan_120k.glb" : "honda_k24z3_scan_280k.glb";
+  const file = phone ? "honda_k24z3_scan_120k_clean.glb" : "honda_k24z3_scan_280k_clean.glb";
   const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/engines/${file}`);
   const lib = await loadPbr();
   let mesh: THREE.Mesh | null = null;
@@ -27,13 +27,16 @@ export async function loadK24Scan(phone: boolean): Promise<K24Scan> {
   if (!mesh) throw new Error("K24 tarama boş");
   const scan = mesh as THREE.Mesh;
   let geo = scan.geometry;
-  try {
-    geo = mergeVertices(geo, 1e-4);
-  } catch {
-    /* indeksli haliyle devam */
+  // COLOR_0 is baked AO. Welding would average it and can drop the interleaved layout.
+  if (!geo.getAttribute("color")) {
+    try {
+      geo = mergeVertices(geo, 1e-4);
+    } catch {
+      /* indeksli haliyle devam */
+    }
+    if (!geo.getAttribute("normal")) geo.computeVertexNormals();
+    bakeCavity(geo);
   }
-  if (!geo.getAttribute("normal")) geo.computeVertexNormals();
-  if (!geo.getAttribute("color")) bakeCavity(geo);
   if (!geo.getAttribute("color")) {
     const pos = geo.getAttribute("position");
     const ao = new Float32Array(pos.count * 3);
@@ -47,6 +50,7 @@ export async function loadK24Scan(phone: boolean): Promise<K24Scan> {
   scan.castShadow = true;
   scan.receiveShadow = true;
   scan.name = "k24";
+  dressWeakSpots(scan);
   const box = new THREE.Box3().setFromObject(gltf.scene);
   const size = box.getSize(new THREE.Vector3());
   const long = Math.max(size.x, size.z);
@@ -57,6 +61,66 @@ export async function loadK24Scan(phone: boolean): Promise<K24Scan> {
   const fitted = new THREE.Box3().setFromObject(gltf.scene);
   const fittedSize = fitted.getSize(new THREE.Vector3());
   return { object: gltf.scene, mesh: scan, height: fittedSize.y, length: Math.max(fittedSize.x, fittedSize.z) };
+}
+
+/** Cover the scan's filled holes: pulley cup, flywheel face, exhaust cap, intake lump. Positions are in mesh-local units. */
+function dressWeakSpots(mesh: THREE.Mesh): void {
+  const rubber = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.92, metalness: 0 });
+  const iron = new THREE.MeshStandardMaterial({ color: 0x3a342e, roughness: 0.62, metalness: 0.55 });
+  const alu = new THREE.MeshStandardMaterial({ color: 0x6a7278, roughness: 0.46, metalness: 0.72 });
+  const steel = new THREE.MeshStandardMaterial({ color: 0x8a9096, roughness: 0.38, metalness: 0.8 });
+  const add = (geo: THREE.BufferGeometry, mat: THREE.Material) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    mesh.add(m);
+    return m;
+  };
+
+  // Crank pulley faces -Z. Hub and belt cover the dark crescent in the pulley cup.
+  const hub = add(new THREE.CylinderGeometry(0.18, 0.2, 0.04, 24), steel);
+  hub.rotation.x = Math.PI / 2;
+  hub.position.set(-0.1, -0.58, -0.7);
+  const bolt = add(new THREE.CylinderGeometry(0.04, 0.04, 0.025, 6), iron);
+  bolt.rotation.x = Math.PI / 2;
+  bolt.position.set(-0.1, -0.58, -0.73);
+  const belt = add(new THREE.TorusGeometry(0.28, 0.018, 8, 32), rubber);
+  belt.position.set(-0.1, -0.58, -0.66);
+
+  // Flywheel end is the filled +Z face. A bell and a short case sit on it, not a crate.
+  const bell = add(new THREE.CylinderGeometry(0.5, 0.38, 0.18, 28), alu);
+  bell.rotation.x = Math.PI / 2;
+  bell.position.set(0.02, -0.12, 0.94);
+  const casing = add(new THREE.CylinderGeometry(0.38, 0.42, 0.32, 24), alu);
+  casing.rotation.x = Math.PI / 2;
+  casing.position.set(0.02, -0.16, 1.16);
+  const sump = add(new THREE.BoxGeometry(0.5, 0.14, 0.28), iron);
+  sump.position.set(0.02, -0.5, 1.14);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const stud = add(new THREE.CylinderGeometry(0.028, 0.028, 0.04, 6), steel);
+    stud.rotation.x = Math.PI / 2;
+    stud.position.set(0.02 + Math.cos(a) * 0.4, -0.12 + Math.sin(a) * 0.4, 0.86);
+  }
+
+  // Exhaust side is -X, which faces the radiator. Keep the pipes against the head
+  // and show a shield, so the filled face is covered without pipes floating on the core.
+  for (let i = 0; i < 4; i++) {
+    const runner = add(new THREE.CylinderGeometry(0.04, 0.045, 0.16, 8), iron);
+    runner.rotation.z = Math.PI / 2;
+    runner.position.set(-0.78, 0.18, -0.24 + i * 0.18);
+  }
+  const collector = add(new THREE.CylinderGeometry(0.055, 0.055, 0.7, 12), iron);
+  collector.rotation.x = Math.PI / 2;
+  collector.position.set(-0.86, 0.08, 0.02);
+
+  // The invented lump is outboard of the intake on +X. The hose stays beside the cover.
+  const hose = add(new THREE.CylinderGeometry(0.09, 0.1, 0.42, 14), rubber);
+  hose.rotation.x = Math.PI / 2;
+  hose.position.set(0.84, 0.55, 0.12);
+  const neck = add(new THREE.CylinderGeometry(0.055, 0.06, 0.2, 10), rubber);
+  neck.rotation.z = Math.PI / 2;
+  neck.position.set(0.68, 0.52, 0.22);
 }
 
 function bakeCavity(geo: THREE.BufferGeometry): void {
@@ -174,9 +238,11 @@ function k24Material(
           float stain = sin(vLPos.x * 37.0) * sin(vLPos.z * 23.0 + vLPos.y * 11.0);
           float oil = smoothstep(0.35, 0.8, stain) * smoothstep(0.18, 0.4, h) * (1.0 - smoothstep(0.7, 0.88, h));
           tint = mix(tint, tint * vec3(0.42, 0.38, 0.28), oil * 0.7);
-          float ao = clamp(vColor.r, 0.22, 1.0);
-          float cavity = mix(0.62, 1.0, smoothstep(-0.15, 0.55, n.y));
-          diffuseColor.rgb *= tex * tint * ao * cavity;
+          float ao = clamp(vColor.r, 0.0, 1.0);
+          // color_fragment already multiplied vColor. Swap that for a 70% blend so crevices stay open.
+          diffuseColor.rgb *= mix(1.0, ao, 0.7) / max(ao, 0.02);
+          float cavity = mix(0.88, 1.0, smoothstep(-0.2, 0.45, n.y));
+          diffuseColor.rgb *= tex * tint * cavity;
         }`,
       );
   };

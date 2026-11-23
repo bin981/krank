@@ -10,7 +10,7 @@ Döngülerin uç örnek adımı dosyanın kendi dalga şekliyle aynı mertebeded
 
 Every file in this folder may be redistributed in a public GitHub repo. Licenses are CC0 1.0, CC BY 3.0/4.0 or CC BY-SA 3.0/4.0. There is no NonCommercial or editorial-only content.
 CC BY / BY-SA items **must be credited** in the app's About page and in the repo. The text below is enough for that.
-CC BY-SA items (marked **SA**) must stay under BY-SA if you modify and redistribute them. This applies to those audio files only, not to the KRANK code.
+CC BY-SA items (marked **SA**) must stay under BY-SA if you modify and redistribute them. That covers the K24Z3 scan and the marked audio files, not the KRANK code.
 
 ## 3D models
 
@@ -30,7 +30,7 @@ CC BY-SA items (marked **SA**) must stay under BY-SA if you modify and redistrib
 | models/props/ratchet_wrench.glb | https://polyhaven.com/a/ratchet_wrench | John Hutcheson (Poly Haven) | CC0 1.0 (https://polyhaven.com/license) |
 | models/props/metal_toolbox.glb | https://polyhaven.com/a/metal_toolbox | Mateusz Sadek (Poly Haven) | CC0 1.0 (https://polyhaven.com/license) |
 | models/props/old_tyre.glb | https://polyhaven.com/a/old_tyre | MP (Poly Haven) | CC0 1.0 (https://polyhaven.com/license) |
-| models/engines/honda_k24z3_scan_280k.glb and honda_k24z3_scan_120k.glb | https://www.printables.com/model/1339398 | Davidss (Printables) | CC BY-SA 4.0 **SA** (https://creativecommons.org/licenses/by-sa/4.0/). Modified: 3MF to GLB, decimated, levelled, centred, metres, meshopt. This asset stays CC BY-SA 4.0. |
+| models/engines/honda_k24z3_scan_280k_clean.glb and honda_k24z3_scan_120k_clean.glb | https://www.printables.com/model/1339398 | Davidss (Printables) | CC BY-SA 4.0 **SA** (https://creativecommons.org/licenses/by-sa/4.0/). Modified: 3MF to GLB, holes closed, shreds removed, decimated to 280k/120k, per-vertex AO in COLOR_0, metres, meshopt. This derivative stays CC BY-SA 4.0. |
 
 ## Textures and HDRIs
 

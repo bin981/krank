@@ -440,6 +440,12 @@ export class EngineAssembly {
     const showMech = internals;
     this.scan.visible = !showMech;
     for (const mesh of this.shell) mesh.visible = showMech && !cut;
+    if (this.gearbox) this.gearbox.visible = showMech;
+    if (this.serviceCover) this.serviceCover.visible = showMech && this.coverOn && !cut;
+    this.root.traverse((obj) => {
+      const part = obj.userData.part as string | undefined;
+      if (part === "Bobin" || part === "Isı kalkanı") obj.visible = showMech;
+    });
     this.crank.visible = showMech;
     this.belt.visible = showMech && !this.frozenCam;
     for (const cyl of this.cyls) {
