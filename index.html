@@ -22,6 +22,9 @@
         <div class="top-actions">
           <button type="button" id="drawer-left" class="ghost mobile-only">Motor</button>
           <button type="button" id="drawer-right" class="ghost mobile-only">Veriler</button>
+          <button type="button" id="hood" class="ghost">Kaput</button>
+          <button type="button" id="hands-toggle" class="ghost">Sök</button>
+          <button type="button" id="credits-btn" class="ghost" title="Emeği geçenler" aria-label="Emeği geçenler">©</button>
           <button type="button" id="sound" class="ghost" aria-pressed="false">Sesi aç</button>
           <button type="button" id="shorts" class="accent" aria-pressed="false">Shorts 9:16</button>
         </div>
@@ -55,6 +58,10 @@
             </div>
           </div>
           <p id="hover" class="hover-name"></p>
+          <div id="hud-gauge" class="hud-gauge" aria-label="Devir">
+            <b id="hud-rpm">2.400</b>
+            <span>dev/dk</span>
+          </div>
           <aside id="part-card" hidden>
             <strong id="part-name"></strong>
             <p id="part-blurb"></p>
@@ -298,7 +305,7 @@
         <label class="explode">Patlat
           <input id="explode" type="range" min="0" max="100" value="0" />
         </label>
-        <button type="button" id="labels" class="ghost on" aria-pressed="true">Etiketler</button>
+        <button type="button" id="labels" class="ghost" aria-pressed="false">Etiketler</button>
         <button type="button" id="spin" class="ghost" aria-pressed="false">Döndür</button>
         <button type="button" id="tour" class="ghost" aria-pressed="false">Tur</button>
         <button type="button" id="slow" class="ghost" aria-pressed="false">Ağır çekim</button>
@@ -311,6 +318,21 @@
         </div>
       </footer>
     </div>
+    <div id="tools" class="tools" hidden>
+      <button type="button" data-tool="10" class="on">10</button>
+      <button type="button" data-tool="12">12</button>
+      <button type="button" data-tool="14">14</button>
+      <button type="button" data-tool="tornavida">Tornavida</button>
+      <button type="button" data-tool="pense">Pense</button>
+      <button type="button" id="explode-toggle">Patlat</button>
+      <p id="hands-note">10 mm lokma seçili.</p>
+    </div>
+    <aside id="credits" class="credits" hidden>
+      <h2>Emeği geçenler</h2>
+      <p>Ortam ışığı: Poly Haven <em>studio_small_03</em>, CC0.</p>
+      <p>Araç, motor ve ses bu depoda üretildi. Kayıtlı motor örneği yok.</p>
+      <button type="button" id="credits-close" class="ghost">Kapat</button>
+    </aside>
     <nav id="dock" aria-label="Paneller">
       <button type="button" data-sheet="motor">Motor</button>
       <button type="button" data-sheet="drive">Sürüş</button>

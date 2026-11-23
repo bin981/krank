@@ -82,7 +82,20 @@ export class EngineAudio {
       comp.ratio.value = 4;
       comp.attack.value = 0.003;
       comp.release.value = 0.16;
+      const length = Math.floor(ctx.sampleRate * 0.8);
+      const impulse = ctx.createBuffer(2, length, ctx.sampleRate);
+      for (let c = 0; c < 2; c++) {
+        const data = impulse.getChannelData(c);
+        for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / length) ** 2.6;
+      }
+      const verb = ctx.createConvolver();
+      verb.buffer = impulse;
+      const wet = ctx.createGain();
+      wet.gain.value = 0.22;
       master.connect(comp);
+      master.connect(verb);
+      verb.connect(wet);
+      wet.connect(comp);
       comp.connect(ctx.destination);
       this.master = master;
 

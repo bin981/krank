@@ -11,6 +11,7 @@ import { EngineAssembly } from "./scene/engine";
 import { Studio } from "./scene/studio";
 import { Hud } from "./ui";
 import { Workshop } from "./workshop";
+import { Hands } from "./hands";
 
 const WEBGL_MESSAGE =
   "Bu tarayıcı WebGL ile üç boyutlu görüntü üretemiyor. Donanım hızlandırmasını açıp sayfayı yenileyin, veya güncel bir Chrome, Firefox ya da Safari deneyin. Mobilde düşük güç modu ve eski ekran kartı sürücüleri de sahneyi boş bırakabilir.";
@@ -59,6 +60,23 @@ const sim = new Simulation();
 const audio = new EngineAudio();
 
 const workshop = new Workshop(sim);
+const hands = new Hands(studio.scene, sim);
+hands.bind(() => studio.engineRoot(), () => studio.garageGroup());
+(window as unknown as { __krankUnscrew?: (part: string) => string }).__krankUnscrew = (part) => hands.unscrew(part);
+document.querySelector("#hood")?.addEventListener("click", () => studio.toggleHood());
+document.querySelector("#hands-toggle")?.addEventListener("click", () => {
+  const on = document.body.classList.toggle("hands");
+  const tools = document.querySelector("#tools") as HTMLElement | null;
+  if (tools) tools.hidden = !on;
+});
+document.querySelector("#credits-btn")?.addEventListener("click", () => {
+  const box = document.querySelector("#credits") as HTMLElement | null;
+  if (box) box.hidden = false;
+});
+document.querySelector("#credits-close")?.addEventListener("click", () => {
+  const box = document.querySelector("#credits") as HTMLElement | null;
+  if (box) box.hidden = true;
+});
 (window as unknown as { __krankSetScenario?: (id: string) => void }).__krankSetScenario = (id) => sim.setScenario(id);
 
 const hud = new Hud(

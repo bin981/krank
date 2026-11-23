@@ -31,7 +31,7 @@ import type { CameraPreset } from "./scene/studio";
 export class Hud {
   readonly spec: EngineSpec;
   private silent = false;
-  private labelsOn = true;
+  private labelsOn = false;
   private spin = false;
   private mode: ViewState["mode"] = "solid";
   private shorts = false;
@@ -104,6 +104,10 @@ export class Hud {
     const red = redlineRpm(sim.spec);
     const tach = document.querySelector("#rpm-read");
     if (tach) tach.textContent = nf0.format(rpm);
+    const hud = document.querySelector("#hud-rpm");
+    if (hud) hud.textContent = nf0.format(rpm);
+    document.querySelector("#hud-gauge")?.classList.toggle("bad", rpm > red || sim.seized);
+    document.querySelector("#hud-gauge")?.classList.toggle("warn", !sim.seized && rpm > red * 0.92 && rpm <= red);
     document.querySelector(".tach")?.classList.toggle("bad", rpm > red || sim.seized);
     document.querySelector(".tach")?.classList.toggle("warn", !sim.seized && rpm > red * 0.92 && rpm <= red);
     text("#torque", `${nf0.format(sim.torqueNm)} Nm`);

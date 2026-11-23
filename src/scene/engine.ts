@@ -18,6 +18,7 @@ import {
 import type { Simulation } from "../engine/sim";
 import type { ViewState } from "../view";
 import { ParticleField } from "./particles";
+import { ironMaps } from "./textures";
 
 interface RodRig {
   pivot: THREE.Group;
@@ -388,9 +389,16 @@ export class EngineAssembly {
     const dims = this.dims;
     const geoms = buildCylinders(spec, dims);
     const gas = spec.fuel === "benzin";
-    const blockMat = this.paint(gas ? 0xb5bac2 : 0x5c636a, 0.46, 0.86, true);
-    const headMat = this.paint(gas ? 0xc5cad1 : 0x6a7178, 0.4, 0.84, true);
-    const coverMat = this.paint(gas ? 0xc81e2c : 0x17190f, gas ? 0.32 : 0.48, gas ? 0.42 : 0.7, true);
+    const blockMat = this.paint(gas ? 0x3e4448 : 0x34383c, 0.86, 0.22, true);
+    const iron = ironMaps();
+    blockMat.map = iron.color;
+    blockMat.roughnessMap = iron.rough;
+    blockMat.bumpMap = iron.bump;
+    blockMat.bumpScale = 1.6;
+    blockMat.envMapIntensity = 0.45;
+    const headMat = this.paint(0xd5dbe2, 0.18, 0.96, true);
+    headMat.envMapIntensity = 1.35;
+    const coverMat = this.paint(gas ? 0xb4232c : 0x1a1c16, gas ? 0.38 : 0.5, gas ? 0.08 : 0.55, true);
     if (coverMat instanceof THREE.MeshPhysicalMaterial && gas) {
       coverMat.clearcoat = 0.65;
       coverMat.clearcoatRoughness = 0.28;
@@ -463,6 +471,7 @@ export class EngineAssembly {
 
       const coverMesh = this.mesh(this.slab(length + 4, width * 0.92, dims.headH * 0.62, [], 10), coverMat, cover, "Supap kapağı");
       coverMesh.position.set(midX, dims.deck + dims.headH * 0.4, 0);
+      this.boltRow(coverMesh, 6, length * 0.42, width * 0.38, dims.headH * 0.62);
       this.hideInCut.push(coverMesh);
       const cap = this.mesh(new THREE.CylinderGeometry(dims.bore * 0.1, dims.bore * 0.11, 6, 16), this.metal(0x222, 0.4), cover, "Yağ kapağı");
       cap.position.set(midX, dims.deck + dims.headH * 1.02, 0);
@@ -893,6 +902,14 @@ export class EngineAssembly {
     }
     this.belt.userData.part = chain ? "Triger zinciri" : "Triger kayışı";
     this.root.add(this.belt);
+    const timingCover = new THREE.Mesh(
+      this.track(new THREE.BoxGeometry(dims.bore * 0.15, dims.bore * 1.35, dims.bore * 1.05)),
+      this.paint(0x2c3136, 0.62, 0.12, false),
+    );
+    timingCover.position.set(front - dims.bore * 0.42, dims.bore * 0.28, 0);
+    timingCover.userData.part = "Triger kapağı";
+    this.boltRow(timingCover, 5, dims.bore * 0.02, dims.bore * 0.42, dims.bore * 0.62);
+    this.root.add(timingCover);
     this.label(chain ? "Zincir" : "Triger", this.belt, front, dims.bore * 0.5, 0);
   }
 
@@ -1389,6 +1406,17 @@ export class EngineAssembly {
     return this.track(geo);
   }
 
+  private boltRow(parent: THREE.Object3D, count: number, spanX: number, spanZ: number, y: number): void {
+    const mat = this.metal(0xc5b48a, 0.28, "steel");
+    for (let i = 0; i < count; i++) {
+      const bolt = new THREE.Mesh(this.track(new THREE.CylinderGeometry(3.2, 3.2, 7, 8)), mat);
+      const t = count === 1 ? 0.5 : i / (count - 1);
+      bolt.position.set((t - 0.5) * spanX * 2, y, (i % 2 === 0 ? 1 : -1) * spanZ);
+      bolt.userData.bolt = true;
+      parent.add(bolt);
+    }
+  }
+
   private mesh(geo: THREE.BufferGeometry, mat: THREE.Material, parent: THREE.Object3D, part?: string): THREE.Mesh {
     const m = new THREE.Mesh(geo, mat);
     m.castShadow = true;
@@ -1436,10 +1464,10 @@ export class EngineAssembly {
     const m = new THREE.MeshPhysicalMaterial({
       color,
       roughness,
-      metalness: alloy ? 0.8 : 1,
-      clearcoat: alloy ? 0.4 : forged ? 0.14 : 0.06,
-      clearcoatRoughness: alloy ? 0.32 : 0.5,
-      envMapIntensity: alloy ? 0.9 : 1.28,
+      metalness: alloy ? 0.92 : 1,
+      clearcoat: alloy ? 0.45 : forged ? 0.2 : 0.08,
+      clearcoatRoughness: alloy ? 0.28 : 0.45,
+      envMapIntensity: alloy ? 1.15 : 1.45,
     });
     this.mats.push(m);
     return m;

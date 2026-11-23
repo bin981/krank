@@ -2,9 +2,15 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import type { Simulation } from "../engine/sim";
 import type { ViewState } from "../view";
 import { EngineAssembly } from "./engine";
+import { Garage } from "./garage";
 
 export type CameraPreset = "threequarter" | "side" | "top" | "front" | "shorts" | "cine";
 
@@ -29,6 +35,17 @@ export class Studio {
   private dist = 7;
   private preset: CameraPreset = "threequarter";
   private interacting = false;
+  private readonly garage = new Garage();
+  private composer: EffectComposer | null = null;
+  readonly engineRoot = (): EngineAssembly | null => this.engine;
+
+  toggleHood(): void {
+    this.garage.toggleHood();
+  }
+
+  garageGroup(): THREE.Group {
+    return this.garage.group;
+  }
 
   constructor(canvas: HTMLCanvasElement, frame: HTMLElement) {
     this.frameEl = frame;
@@ -37,13 +54,13 @@ export class Studio {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, graphics.lite ? 1.25 : 1.75));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.12;
+    this.renderer.toneMappingExposure = 0.78;
     this.renderer.shadowMap.enabled = !graphics.lite;
-    if (!graphics.lite) this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    if (!graphics.lite) this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    this.camera = new THREE.PerspectiveCamera(34, 1, 0.05, 80);
-    this.scene.background = new THREE.Color(0x10120e);
-    this.scene.fog = new THREE.Fog(0x10120e, 14, 32);
+    this.camera = new THREE.PerspectiveCamera(34, 1, 0.08, 80);
+    this.scene.background = new THREE.Color(0x3c3a36);
+    this.scene.fog = new THREE.Fog(0x3c3a36, 28, 48);
 
     try {
       const pmrem = new THREE.PMREMGenerator(this.renderer);
@@ -54,32 +71,36 @@ export class Studio {
     } catch (err) {
       console.warn("Ortam haritası atlandı.", err);
     }
+    new RGBELoader().load(`${import.meta.env.BASE_URL}hdri/studio_small_03_1k.hdr`, (tex) => {
+      tex.mapping = THREE.EquirectangularReflectionMapping;
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      this.scene.environment = pmrem.fromEquirectangular(tex).texture;
+      tex.dispose();
+      pmrem.dispose();
+    });
 
-    const key = new THREE.DirectionalLight(0xfff1dc, 2.8);
+    const key = new THREE.DirectionalLight(0xfff1dc, 1.65);
     key.position.set(5.5, 8.5, 4.2);
     if (!graphics.lite) {
       key.castShadow = true;
       key.shadow.mapSize.set(2048, 2048);
       key.shadow.camera.near = 0.5;
       key.shadow.camera.far = 28;
-      key.shadow.camera.left = -7;
-      key.shadow.camera.right = 7;
-      key.shadow.camera.top = 7;
-      key.shadow.camera.bottom = -7;
+      key.shadow.camera.left = -12;
+      key.shadow.camera.right = 12;
+      key.shadow.camera.top = 12;
+      key.shadow.camera.bottom = -12;
       key.shadow.bias = -0.00035;
     }
     this.scene.add(key);
-    this.scene.add(new THREE.AmbientLight(0xd7d2c4, 0.18));
-    this.scene.add(new THREE.HemisphereLight(0xc9d4e4, 0x2a261c, 0.55));
-    const rim = new THREE.DirectionalLight(0xc5dcff, 1.55);
+    this.scene.add(new THREE.AmbientLight(0xd7d2c4, 0.12));
+    this.scene.add(new THREE.HemisphereLight(0xc9d4e4, 0x2a261c, 0.38));
+    const rim = new THREE.DirectionalLight(0xc5dcff, 0.55);
     rim.position.set(-6, 4, -4);
     this.scene.add(rim);
-    const fill = new THREE.DirectionalLight(0xffe2c4, 0.65);
+    const fill = new THREE.DirectionalLight(0xffe2c4, 0.32);
     fill.position.set(-2, 2.2, 6);
     this.scene.add(fill);
-    const kick = new THREE.DirectionalLight(0xe7ffb0, 0.35);
-    kick.position.set(0, 1.5, -6);
-    this.scene.add(kick);
 
     this.fireLight.castShadow = false;
     this.scene.add(this.fireLight);
@@ -89,7 +110,7 @@ export class Studio {
       new THREE.MeshStandardMaterial({ color: 0x141611, roughness: 0.88, metalness: 0.12 }),
     );
     floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
+    floor.visible = false;
     this.scene.add(floor);
     const grid = new THREE.GridHelper(12, 24, 0x3c4334, 0x23281f);
     const gridMat = grid.material;
@@ -99,7 +120,9 @@ export class Studio {
       m.opacity = 0.45;
     }
     grid.position.y = 0.004;
+    grid.visible = false;
     this.scene.add(grid);
+    this.scene.add(this.garage.group);
 
     const spot = radialTexture();
     const backdrop = new THREE.Mesh(
@@ -107,6 +130,7 @@ export class Studio {
       new THREE.MeshBasicMaterial({ map: spot, transparent: true, depthWrite: false }),
     );
     backdrop.position.set(0, 1.6, -4.2);
+    backdrop.visible = false;
     this.scene.add(backdrop);
 
     this.css = new CSS2DRenderer();
@@ -118,9 +142,9 @@ export class Studio {
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
-    this.controls.maxPolarAngle = Math.PI * 0.49;
-    this.controls.minDistance = 1.6;
-    this.controls.maxDistance = 18;
+    this.controls.maxPolarAngle = Math.PI * 0.55;
+    this.controls.minDistance = 1.2;
+    this.controls.maxDistance = 24;
     this.controls.target.copy(this.center);
     this.controls.addEventListener("start", () => {
       this.desired = null;
@@ -133,6 +157,29 @@ export class Studio {
       this.hover = "";
     });
 
+    if (!graphics.lite) {
+      try {
+        const composer = new EffectComposer(this.renderer);
+        composer.addPass(new RenderPass(this.scene, this.camera));
+        composer.addPass(new UnrealBloomPass(new THREE.Vector2(512, 512), 0.045, 0.4, 0.94));
+        composer.addPass(new OutputPass());
+        this.composer = composer;
+      } catch (err) {
+        console.warn("Son işlem atlandı.", err);
+      }
+    }
+    const api = window as unknown as {
+      __krankCamera?: THREE.Camera;
+      __krankLook?: (x: number, y: number, z: number, tx: number, ty: number, tz: number) => void;
+    };
+    api.__krankCamera = this.camera;
+    api.__krankLook = (x, y, z, tx, ty, tz) => {
+      this.desired = null;
+      this.interacting = true;
+      this.camera.position.set(x, y, z);
+      this.controls.target.set(tx, ty, tz);
+      this.controls.update();
+    };
     this.resize();
   }
 
@@ -143,14 +190,11 @@ export class Studio {
     }
     this.engine = engine;
     this.scene.add(engine.root);
-    engine.root.position.set(0, -engine.feetY * engine.root.scale.y, 0);
+    engine.root.position.set(0, -engine.feetY * engine.root.scale.y + 0.25, 1.15);
     engine.basePos.copy(engine.root.position);
     engine.root.updateWorldMatrix(true, true);
-    const box = new THREE.Box3().setFromObject(engine.root);
-    box.getCenter(this.center);
-    const size = box.getSize(new THREE.Vector3());
-    this.dist = Math.max(size.x, size.y, size.z) * 1.48;
-    this.center.y = box.min.y + size.y * 0.46;
+    this.dist = 12.4;
+    this.center.set(0, 2.5, 0.9);
     this.frameTo(this.shorts ? "shorts" : this.preset === "shorts" ? "threequarter" : this.preset, true);
     engine.refreshBadge();
   }
@@ -191,6 +235,7 @@ export class Studio {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);
+    this.composer?.setSize(w, h);
     this.css.setSize(w, h);
   }
 
@@ -219,8 +264,10 @@ export class Studio {
       else this.camera.lookAt(this.controls.target);
     }
     if (this.engine) this.engine.hoverName = this.hover;
+    this.garage.update(dt);
     this.engine?.update(sim, view, dt, this.fireLight);
-    this.renderer.render(this.scene, this.camera);
+    if (this.composer) this.composer.render();
+    else this.renderer.render(this.scene, this.camera);
     this.css.render(this.scene, this.camera);
   }
 
