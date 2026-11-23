@@ -12,6 +12,7 @@ import { Studio } from "./scene/studio";
 import { Hud } from "./ui";
 import { Workshop } from "./workshop";
 import { Hands } from "./hands";
+import creditsMd from "../CREDITS.md?raw";
 
 const WEBGL_MESSAGE =
   "Bu tarayıcı WebGL ile üç boyutlu görüntü üretemiyor. Donanım hızlandırmasını açıp sayfayı yenileyin, veya güncel bir Chrome, Firefox ya da Safari deneyin. Mobilde düşük güç modu ve eski ekran kartı sürücüleri de sahneyi boş bırakabilir.";
@@ -62,6 +63,7 @@ const audio = new EngineAudio();
 const workshop = new Workshop(sim);
 const hands = new Hands(studio.scene, sim);
 hands.bind(() => studio.engineRoot(), () => studio.garageGroup());
+hands.onTool = (tool) => studio.showTool(tool);
 (window as unknown as { __krankUnscrew?: (part: string) => string }).__krankUnscrew = (part) => hands.unscrew(part);
 document.querySelector("#hood")?.addEventListener("click", () => studio.toggleHood());
 document.querySelector("#hands-toggle")?.addEventListener("click", () => {
@@ -69,6 +71,8 @@ document.querySelector("#hands-toggle")?.addEventListener("click", () => {
   const tools = document.querySelector("#tools") as HTMLElement | null;
   if (tools) tools.hidden = !on;
 });
+const creditsBody = document.querySelector("#credits-body");
+if (creditsBody) creditsBody.innerHTML = renderCredits(creditsMd);
 document.querySelector("#credits-btn")?.addEventListener("click", () => {
   const box = document.querySelector("#credits") as HTMLElement | null;
   if (box) box.hidden = false;
@@ -149,6 +153,7 @@ function loop(now: number): void {
     sim.radiatorBlocked = hud.radiatorBlocked;
     sim.spec.boostTarget = hud.spec.boostTarget;
     sim.update(dt * hud.timeScale);
+    hands.setTray(studio.benchPoint());
     studio.update(sim, view, dt);
     audio.update(sim);
     hud.sync(sim, studio.hover);
@@ -162,6 +167,46 @@ function loop(now: number): void {
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
+
+function renderCredits(md: string): string {
+  const lines = md.split(/\r?\n/);
+  const out: string[] = [];
+  let table: string[] = [];
+  const flush = () => {
+    if (!table.length) return;
+    const rows = table.filter((row) => !/^\s*\|?\s*-{3,}/.test(row.replace(/\|/g, "")));
+    const cells = rows.map((row) => row.split("|").slice(1, -1).map((c) => c.trim()));
+    const head = cells[0] ?? [];
+    const body = cells.slice(1).filter((c) => c.some(Boolean) && !c.every((x) => /^-+$/.test(x)));
+    out.push("<table><thead><tr>" + head.map((c) => `<th>${inline(c)}</th>`).join("") + "</tr></thead><tbody>");
+    for (const row of body) out.push("<tr>" + row.map((c) => `<td>${inline(c)}</td>`).join("") + "</tr>");
+    out.push("</tbody></table>");
+    table = [];
+  };
+  for (const line of lines) {
+    if (line.trim().startsWith("|")) {
+      table.push(line);
+      continue;
+    }
+    flush();
+    if (line.startsWith("### ")) out.push(`<h3>${inline(line.slice(4))}</h3>`);
+    else if (line.startsWith("## ")) out.push(`<h3>${inline(line.slice(3))}</h3>`);
+    else if (line.startsWith("# ")) out.push(`<h2>${inline(line.slice(2))}</h2>`);
+    else if (line.trim()) out.push(`<p>${inline(line)}</p>`);
+  }
+  flush();
+  return out.join("");
+}
+
+function inline(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+}
 
 function webglAvailable(): boolean {
   try {

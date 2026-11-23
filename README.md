@@ -76,3 +76,19 @@ Yağ seviyesi kaydırıcısı ve **Radyatör tıkalı** anahtarı bu birikimi h�
 ## Ses
 
 Web Audio ile üretilir. Ateşleme tıkları krank açısına kilitlenir; dizel daha kuru ve tiz, benzin daha yuvarlaktır. Turbo ıslığı basınca ve devire bağlıdır. Vuruntuda metalik tık, kopmada patlama duyulur. Sağ üstten kapatılabilir.
+
+## Modeller ve ses
+
+Araç, atölye ve el aletleri glTF olarak gelir (`public/models`). tevy.dev dosyaları `EXT_meshopt_compression` ve KTX2 kullanır. Yükleyici `MeshoptDecoder` ile `KTX2Loader` kurar; Basis dönüştürücü `public/basis/` altındadır.
+
+```ts
+loader.setMeshoptDecoder(MeshoptDecoder);
+loader.setKTX2Loader(new KTX2Loader().setTranscoderPath(`${import.meta.env.BASE_URL}basis/`).detectSupport(renderer));
+```
+
+Kaput düğümü `bonnet` adındadır ve yerel X ekseninde yaklaşık -1 radyan açılır. Motor, kaputtaki `bays` yer tutucusunun yerine enine oturur.
+
+Ortam ışığı Poly Haven `auto_service` HDR'dir. Telefon ve düşük güçte 1k, masaüstünde 2k dosya yüklenir.
+
+Motor sesi kayıtlı döngülerden gelir (`public/sounds`). Komşu döngüler devire göre eşit güçlü karışır; her döngü kendi devrine göre en fazla %15 hızlanır. Benzin bankası Renault 19, Ford Ranger ve yüksek devirde Honda F20C; dizel bankası VW, Peugeot 306 TD ve VW TDI kayıtlarıdır. Marş, gerçek çalıştırma kayıtlarını çalar. Vuruntu ve tekleme kısa sentez katmanıdır. Lisanslar `CREDITS.md` ve uygulamadaki Emeği Geçenler ekranındadır. CC BY-SA dosyalar değiştirilmeden durur.
+

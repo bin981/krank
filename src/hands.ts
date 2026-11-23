@@ -66,9 +66,16 @@ export class Hands {
     return this.message;
   }
 
+  onTool: (tool: Tool) => void = () => {};
+
+  setTray(point: THREE.Vector3): void {
+    this.tray.position.copy(point);
+  }
+
   setTool(tool: Tool): void {
     this.tool = tool;
     this.message = `${this.toolLabel(tool)} seçili.`;
+    this.onTool(tool);
   }
 
   click(_root: THREE.Object3D | null, hit: THREE.Object3D | null): void {

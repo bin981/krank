@@ -18,7 +18,7 @@ import {
 import type { Simulation } from "../engine/sim";
 import type { ViewState } from "../view";
 import { ParticleField } from "./particles";
-import { ironMaps } from "./textures";
+import { boxProject, paintMaterial, type PbrLibrary, type PbrRole } from "./pbr";
 
 interface RodRig {
   pivot: THREE.Group;
@@ -139,6 +139,7 @@ export class EngineAssembly {
     this.belt = new THREE.Group();
     this.gasketMat = this.housingMat(0x2a2c28, 0.55, 0.15);
     this.exhaustMat = this.housingMat(spec.fuel === "dizel" ? 0x6a463c : 0x7a5144, 0.42, 0.72);
+    this.exhaustMat.userData.pbr = "ironDark";
     this.exhaustMat.emissive = new THREE.Color(0xff4a16);
     this.turboMat = this.housingMat(0x8a8f96, 0.28, 0.92);
     this.turboMat.emissive = new THREE.Color(0xff5a22);
@@ -146,8 +147,14 @@ export class EngineAssembly {
     this.root.add(this.particles.points);
     this.feetY = -Math.max(this.dims.bore * 1.42, this.dims.r * 2.6);
     this.buildStands();
+    this.dressBay();
+    const seen = new Set<THREE.BufferGeometry>();
     this.root.traverse((obj) => {
       obj.frustumCulled = false;
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh || seen.has(mesh.geometry)) return;
+      seen.add(mesh.geometry);
+      boxProject(mesh.geometry);
     });
   }
 
@@ -390,15 +397,11 @@ export class EngineAssembly {
     const geoms = buildCylinders(spec, dims);
     const gas = spec.fuel === "benzin";
     const blockMat = this.paint(gas ? 0x3e4448 : 0x34383c, 0.86, 0.22, true);
-    const iron = ironMaps();
-    blockMat.map = iron.color;
-    blockMat.roughnessMap = iron.rough;
-    blockMat.bumpMap = iron.bump;
-    blockMat.bumpScale = 1.6;
-    blockMat.envMapIntensity = 0.45;
+    blockMat.userData.pbr = gas ? "iron" : "ironDark";
     const headMat = this.paint(0xd5dbe2, 0.18, 0.96, true);
-    headMat.envMapIntensity = 1.35;
+    headMat.userData.pbr = "alu";
     const coverMat = this.paint(gas ? 0xb4232c : 0x1a1c16, gas ? 0.38 : 0.5, gas ? 0.08 : 0.55, true);
+    coverMat.userData.pbr = gas ? "paint" : "alu";
     if (coverMat instanceof THREE.MeshPhysicalMaterial && gas) {
       coverMat.clearcoat = 0.65;
       coverMat.clearcoatRoughness = 0.28;
@@ -444,6 +447,12 @@ export class EngineAssembly {
       const boreHoles = list.map((c) => ({ x: c.x - midX, z: 0, r: dims.bore / 2 }));
       const block = this.mesh(this.slab(length, width, blockH, boreHoles, 6), blockMat, pivot, "Silindir bloğu");
       block.position.set(midX, dims.boreBottom, 0);
+      for (let rib = 0; rib < 4; rib++) {
+        const fin = new THREE.Mesh(this.track(new THREE.BoxGeometry(length * 0.72, Math.max(6, blockH * 0.07), 5)), blockMat);
+        fin.position.set(midX, dims.boreBottom + blockH * (0.18 + rib * 0.2), width * 0.52);
+        fin.userData.part = "Döküm kanat";
+        pivot.add(fin);
+      }
       this.hideInCut.push(block);
 
       const valveR = dims.bore * 0.11;
@@ -809,9 +818,11 @@ export class EngineAssembly {
     alt.position.set(front + dims.bore * 0.15, dims.bore * 0.85, -dims.bore * 0.75);
     alt.userData.part = "Alternatör";
     this.root.add(alt);
+    const beltMat = this.plain(0x1a1c18, 0.7, 0.05);
+    beltMat.userData.pbr = "rubber";
     const belt = new THREE.Mesh(
       this.track(new THREE.TorusGeometry(dims.bore * 0.55, 2.2, 6, 20)),
-      this.plain(0x1a1c18, 0.7, 0.05),
+      beltMat,
     );
     belt.rotation.y = Math.PI / 2;
     belt.position.set(front, dims.bore * 0.4, -dims.bore * 0.35);
@@ -895,7 +906,9 @@ export class EngineAssembly {
         tensioner.userData.part = "Zincir gergisi";
         this.belt.add(tensioner);
       } else {
-        const belt = new THREE.Mesh(this.track(new THREE.TubeGeometry(curve, 64, 3.4, 6, false)), this.plain(0x141614, 0.72, 0.02));
+        const timingMat = this.plain(0x141614, 0.72, 0.02);
+        timingMat.userData.pbr = "rubber";
+        const belt = new THREE.Mesh(this.track(new THREE.TubeGeometry(curve, 64, 3.4, 6, false)), timingMat);
         belt.userData.part = "Triger kayışı";
         this.belt.add(belt);
       }
@@ -1035,6 +1048,7 @@ export class EngineAssembly {
       cradle.position.y = top;
       g.add(foot, legL, legR, cradle);
       g.position.x = x;
+      g.userData.stand = true;
       this.root.add(g);
     }
     const canvas = document.createElement("canvas");
@@ -1400,10 +1414,42 @@ export class EngineAssembly {
       path.absarc(h.x, -h.z, h.r, 0, Math.PI * 2, true);
       shape.holes.push(path);
     }
-    const geo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false, curveSegments: 20, steps: 1 });
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth: height,
+      bevelEnabled: height > 8,
+      bevelThickness: Math.min(2.4, height * 0.08),
+      bevelSize: Math.min(1.8, Math.max(0.8, radius * 0.35)),
+      bevelSegments: 1,
+      curveSegments: 10,
+      steps: 1,
+    });
     geo.rotateX(-Math.PI / 2);
     geo.computeVertexNormals();
     return this.track(geo);
+  }
+
+  applyPbr(lib: PbrLibrary): void {
+    for (const mat of this.mats) {
+      const role = mat.userData.pbr as PbrRole | undefined;
+      if (!role || !lib[role] || !(mat instanceof THREE.MeshStandardMaterial)) continue;
+      paintMaterial(mat, lib[role], role);
+    }
+  }
+
+  private dressBay(): void {
+    const dims = this.dims;
+    const rubber = this.plain(0x1c1c1c, 0.86, 0.02);
+    rubber.userData.pbr = "rubber";
+    const loom = this.plain(0x141414, 0.8, 0.04);
+    loom.userData.pbr = "rubber";
+    const from = new THREE.Vector3(0, dims.deck + dims.headH * 0.3, dims.bore * 0.2);
+    const to = new THREE.Vector3(dims.bore * 0.4, dims.deck * 0.35, dims.bore * 1.15);
+    this.pipe(from, to, 5.5, rubber);
+    for (let i = 0; i < 3; i++) {
+      const a = from.clone().add(new THREE.Vector3(-8 + i * 6, 6, -dims.bore * 0.15));
+      const b = new THREE.Vector3(dims.bore * 1.1, dims.deck * 0.2, -dims.bore * 0.9);
+      this.pipe(a, b, 2.2, loom);
+    }
   }
 
   private boltRow(parent: THREE.Object3D, count: number, spanX: number, spanZ: number, y: number): void {
@@ -1469,6 +1515,7 @@ export class EngineAssembly {
       clearcoatRoughness: alloy ? 0.28 : 0.45,
       envMapIntensity: alloy ? 1.15 : 1.45,
     });
+    m.userData.pbr = alloy ? "alu" : forged ? "steel" : "steel";
     this.mats.push(m);
     return m;
   }

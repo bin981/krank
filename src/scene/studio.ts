@@ -1,12 +1,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
-import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { loadPbr, type PbrLibrary } from "./pbr";
 import type { Simulation } from "../engine/sim";
 import type { ViewState } from "../view";
 import { EngineAssembly } from "./engine";
@@ -35,8 +31,8 @@ export class Studio {
   private dist = 7;
   private preset: CameraPreset = "threequarter";
   private interacting = false;
-  private readonly garage = new Garage();
-  private composer: EffectComposer | null = null;
+  private readonly garage: Garage;
+  private pbr: PbrLibrary | null = null;
   readonly engineRoot = (): EngineAssembly | null => this.engine;
 
   toggleHood(): void {
@@ -58,28 +54,35 @@ export class Studio {
     this.renderer.shadowMap.enabled = !graphics.lite;
     if (!graphics.lite) this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    this.camera = new THREE.PerspectiveCamera(34, 1, 0.08, 80);
-    this.scene.background = new THREE.Color(0x3c3a36);
-    this.scene.fog = new THREE.Fog(0x3c3a36, 28, 48);
+    this.camera = new THREE.PerspectiveCamera(38, 1, 0.05, 160);
+    this.scene.background = new THREE.Color(0x242220);
 
-    try {
-      const pmrem = new THREE.PMREMGenerator(this.renderer);
-      const env = new RoomEnvironment();
-      this.scene.environment = pmrem.fromScene(env, 0.04).texture;
-      env.dispose();
-      pmrem.dispose();
-    } catch (err) {
-      console.warn("Ortam haritası atlandı.", err);
-    }
-    new RGBELoader().load(`${import.meta.env.BASE_URL}hdri/studio_small_03_1k.hdr`, (tex) => {
+    const phone = graphics.lite || window.matchMedia("(max-width: 840px)").matches;
+    const hdrFile = phone ? "auto_service_1k.hdr" : "auto_service_2k.hdr";
+    new RGBELoader().load(`${import.meta.env.BASE_URL}textures/hdri/${hdrFile}`, (tex) => {
       tex.mapping = THREE.EquirectangularReflectionMapping;
       const pmrem = new THREE.PMREMGenerator(this.renderer);
       this.scene.environment = pmrem.fromEquirectangular(tex).texture;
-      tex.dispose();
+      this.scene.background = tex;
+      this.renderer.toneMappingExposure = phone ? 0.92 : 0.84;
       pmrem.dispose();
     });
+    this.garage = new Garage(this.renderer);
+    this.scene.add(this.garage.group);
+    this.garage.onReady = (center) => {
+      this.center.copy(center);
+      this.dist = phone ? 4.2 : 5.2;
+      this.desired = null;
+      this.camera.position.set(center.x + 1.55, center.y + 1.25, center.z + 1.85);
+      this.controls.target.set(center.x, center.y + 0.05, center.z - 0.15);
+      this.controls.update();
+    };
+    void loadPbr().then((lib) => {
+      this.pbr = lib;
+      this.engine?.applyPbr(lib);
+    });
 
-    const key = new THREE.DirectionalLight(0xfff1dc, 1.65);
+    const key = new THREE.DirectionalLight(0xfff1dc, 0.55);
     key.position.set(5.5, 8.5, 4.2);
     if (!graphics.lite) {
       key.castShadow = true;
@@ -93,12 +96,12 @@ export class Studio {
       key.shadow.bias = -0.00035;
     }
     this.scene.add(key);
-    this.scene.add(new THREE.AmbientLight(0xd7d2c4, 0.12));
-    this.scene.add(new THREE.HemisphereLight(0xc9d4e4, 0x2a261c, 0.38));
-    const rim = new THREE.DirectionalLight(0xc5dcff, 0.55);
+    this.scene.add(new THREE.AmbientLight(0xd7d2c4, 0.08));
+    this.scene.add(new THREE.HemisphereLight(0xc9d4e4, 0x2a261c, 0.18));
+    const rim = new THREE.DirectionalLight(0xc5dcff, 0.22);
     rim.position.set(-6, 4, -4);
     this.scene.add(rim);
-    const fill = new THREE.DirectionalLight(0xffe2c4, 0.32);
+    const fill = new THREE.DirectionalLight(0xffe2c4, 0.16);
     fill.position.set(-2, 2.2, 6);
     this.scene.add(fill);
 
@@ -122,7 +125,6 @@ export class Studio {
     grid.position.y = 0.004;
     grid.visible = false;
     this.scene.add(grid);
-    this.scene.add(this.garage.group);
 
     const spot = radialTexture();
     const backdrop = new THREE.Mesh(
@@ -142,9 +144,9 @@ export class Studio {
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
-    this.controls.maxPolarAngle = Math.PI * 0.55;
-    this.controls.minDistance = 1.2;
-    this.controls.maxDistance = 24;
+    this.controls.maxPolarAngle = Math.PI * 0.49;
+    this.controls.minDistance = 0.8;
+    this.controls.maxDistance = 28;
     this.controls.target.copy(this.center);
     this.controls.addEventListener("start", () => {
       this.desired = null;
@@ -157,17 +159,7 @@ export class Studio {
       this.hover = "";
     });
 
-    if (!graphics.lite) {
-      try {
-        const composer = new EffectComposer(this.renderer);
-        composer.addPass(new RenderPass(this.scene, this.camera));
-        composer.addPass(new UnrealBloomPass(new THREE.Vector2(512, 512), 0.045, 0.4, 0.94));
-        composer.addPass(new OutputPass());
-        this.composer = composer;
-      } catch (err) {
-        console.warn("Son işlem atlandı.", err);
-      }
-    }
+    // Bloom, farların hale yapıp motor yuvasını beyaza boyuyordu. ACES + HDR yeterli.
     const api = window as unknown as {
       __krankCamera?: THREE.Camera;
       __krankLook?: (x: number, y: number, z: number, tx: number, ty: number, tz: number) => void;
@@ -185,18 +177,23 @@ export class Studio {
 
   setEngine(engine: EngineAssembly): void {
     if (this.engine) {
-      this.scene.remove(this.engine.root);
+      this.engine.root.removeFromParent();
       this.engine.dispose();
     }
     this.engine = engine;
-    this.scene.add(engine.root);
-    engine.root.position.set(0, -engine.feetY * engine.root.scale.y + 0.25, 1.15);
-    engine.basePos.copy(engine.root.position);
-    engine.root.updateWorldMatrix(true, true);
-    this.dist = 12.4;
-    this.center.set(0, 2.5, 0.9);
+    this.garage.mount(engine);
+    if (this.pbr) engine.applyPbr(this.pbr);
+    this.dist = 9.4;
     this.frameTo(this.shorts ? "shorts" : this.preset === "shorts" ? "threequarter" : this.preset, true);
     engine.refreshBadge();
+  }
+
+  showTool(id: string): void {
+    this.garage.showTool(id);
+  }
+
+  benchPoint(): THREE.Vector3 {
+    return this.garage.benchTop;
   }
 
   setShorts(on: boolean): void {
@@ -235,7 +232,6 @@ export class Studio {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);
-    this.composer?.setSize(w, h);
     this.css.setSize(w, h);
   }
 
@@ -266,8 +262,7 @@ export class Studio {
     if (this.engine) this.engine.hoverName = this.hover;
     this.garage.update(dt);
     this.engine?.update(sim, view, dt, this.fireLight);
-    if (this.composer) this.composer.render();
-    else this.renderer.render(this.scene, this.camera);
+    this.renderer.render(this.scene, this.camera);
     this.css.render(this.scene, this.camera);
   }
 

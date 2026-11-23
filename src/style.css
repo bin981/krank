@@ -521,14 +521,22 @@ body.sheet-drive #bottom { display: flex; }
   position: fixed;
   z-index: 12;
   left: 50%;
-  top: 18%;
+  top: 72px;
   transform: translateX(-50%);
-  width: min(420px, calc(100% - 24px));
-  padding: 16px;
+  width: min(720px, calc(100% - 20px));
+  max-height: min(74dvh, 760px);
+  overflow: auto;
+  padding: 16px 16px 20px;
   border-radius: 16px;
   background: #161910;
   border: 1px solid var(--line);
 }
+.credits h2, .credits h3 { margin: 14px 0 6px; }
+.credits p { margin: 6px 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.credits table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 8px 0 14px; }
+.credits th, .credits td { text-align: left; vertical-align: top; padding: 6px 6px; border-bottom: 1px solid #2a2e24; }
+.credits a { color: var(--acid); }
+.credits code { font-size: 11px; }
 
 .seg button, .chips button, .fails button, .ghost, .accent, .run, .danger {
   transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
