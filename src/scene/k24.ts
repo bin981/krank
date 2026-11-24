@@ -77,31 +77,37 @@ function dressWeakSpots(mesh: THREE.Mesh): void {
     return m;
   };
 
-  // Crank pulley faces -Z. Hub and belt cover the dark crescent in the pulley cup.
-  const hub = add(new THREE.CylinderGeometry(0.18, 0.2, 0.04, 24), steel);
+  // Crank pulley faces -Z. Hub covers the dark crescent; the serpentine belt is the drive below.
+  const hub = add(new THREE.CylinderGeometry(0.16, 0.18, 0.035, 24), steel);
   hub.rotation.x = Math.PI / 2;
   hub.position.set(-0.1, -0.58, -0.7);
-  const bolt = add(new THREE.CylinderGeometry(0.04, 0.04, 0.025, 6), iron);
+  const bolt = add(new THREE.CylinderGeometry(0.04, 0.04, 0.022, 6), iron);
   bolt.rotation.x = Math.PI / 2;
-  bolt.position.set(-0.1, -0.58, -0.73);
-  const belt = add(new THREE.TorusGeometry(0.28, 0.018, 8, 32), rubber);
-  belt.position.set(-0.1, -0.58, -0.66);
+  bolt.position.set(-0.1, -0.58, -0.725);
+  buildAccessoryDrive(add, rubber, steel, alu);
 
-  // Flywheel end is the filled +Z face. A bell and a short case sit on it, not a crate.
-  const bell = add(new THREE.CylinderGeometry(0.5, 0.38, 0.18, 28), alu);
+  // Flywheel end is the filled +Z face. Cast bellhousing with ribs and bolt bosses.
+  const bell = add(new THREE.CylinderGeometry(0.48, 0.36, 0.16, 28), alu);
   bell.rotation.x = Math.PI / 2;
   bell.position.set(0.02, -0.12, 0.94);
-  const casing = add(new THREE.CylinderGeometry(0.38, 0.42, 0.32, 24), alu);
+  const casing = add(new THREE.CylinderGeometry(0.34, 0.4, 0.3, 24), alu);
   casing.rotation.x = Math.PI / 2;
-  casing.position.set(0.02, -0.16, 1.16);
-  const sump = add(new THREE.BoxGeometry(0.5, 0.14, 0.28), iron);
-  sump.position.set(0.02, -0.5, 1.14);
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    const stud = add(new THREE.CylinderGeometry(0.028, 0.028, 0.04, 6), steel);
+  casing.position.set(0.02, -0.16, 1.14);
+  const sump = add(new THREE.BoxGeometry(0.46, 0.12, 0.26), iron);
+  sump.position.set(0.02, -0.48, 1.12);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const stud = add(new THREE.CylinderGeometry(0.026, 0.03, 0.035, 6), steel);
     stud.rotation.x = Math.PI / 2;
-    stud.position.set(0.02 + Math.cos(a) * 0.4, -0.12 + Math.sin(a) * 0.4, 0.86);
+    stud.position.set(0.02 + Math.cos(a) * 0.4, -0.12 + Math.sin(a) * 0.4, 0.87);
   }
+  for (let i = 0; i < 4; i++) {
+    const rib = add(new THREE.BoxGeometry(0.62, 0.028, 0.16), alu);
+    rib.position.set(0.02, -0.32 + i * 0.12, 1.16);
+  }
+  const starterBoss = add(new THREE.CylinderGeometry(0.07, 0.08, 0.1, 12), alu);
+  starterBoss.rotation.z = Math.PI / 2;
+  starterBoss.position.set(0.28, -0.28, 1.02);
 
   // Exhaust side is -X, which faces the radiator. Keep the pipes against the head
   // and show a shield, so the filled face is covered without pipes floating on the core.
@@ -121,6 +127,112 @@ function dressWeakSpots(mesh: THREE.Mesh): void {
   const neck = add(new THREE.CylinderGeometry(0.055, 0.06, 0.2, 10), rubber);
   neck.rotation.z = Math.PI / 2;
   neck.position.set(0.68, 0.52, 0.22);
+}
+
+type DriveAdd = (geo: THREE.BufferGeometry, mat: THREE.Material) => THREE.Mesh;
+
+/** Poly-V belt on the accessory face. Path radius matches each pulley so the ribs sit in the grooves. */
+function buildAccessoryDrive(add: DriveAdd, rubber: THREE.Material, steel: THREE.Material, alu: THREE.Material): void {
+  const z = -0.665;
+  const pulleys = [
+    { name: "crank", x: -0.1, y: -0.58, r: 0.26 },
+    { name: "ac", x: 0.24, y: -0.4, r: 0.12 },
+    { name: "alt", x: 0.04, y: -0.1, r: 0.095 },
+    { name: "idler", x: -0.24, y: -0.26, r: 0.055 },
+    { name: "ten", x: -0.3, y: -0.46, r: 0.065 },
+  ];
+  const points = beltPoints(pulleys);
+  const ribs = 6;
+  const spacing = 0.0075;
+  for (let i = 0; i < ribs; i++) {
+    const zOff = (i - (ribs - 1) / 2) * spacing;
+    const curve = new THREE.CatmullRomCurve3(
+      points.map((p) => new THREE.Vector3(p.x, p.y, z + zOff)),
+      true,
+      "catmullrom",
+      0.05,
+    );
+    const tube = add(new THREE.TubeGeometry(curve, points.length, 0.0026, 5, true), rubber);
+    tube.name = "serpentine";
+  }
+  for (const p of pulleys) {
+    const hubR = Math.max(0.02, p.r - 0.02);
+    const hub = add(new THREE.CylinderGeometry(hubR, hubR, ribs * spacing + 0.01, p.name === "crank" ? 28 : 18), p.name === "crank" ? steel : alu);
+    hub.rotation.x = Math.PI / 2;
+    hub.position.set(p.x, p.y, z);
+    for (let i = 0; i < ribs; i++) {
+      const zOff = (i - (ribs - 1) / 2) * spacing;
+      const groove = add(new THREE.TorusGeometry(p.r + 0.004, 0.0022, 5, p.name === "crank" ? 36 : 22), steel);
+      groove.position.set(p.x, p.y, z + zOff);
+    }
+  }
+  const ac = add(new THREE.CylinderGeometry(0.1, 0.1, 0.16, 16), alu);
+  ac.rotation.x = Math.PI / 2;
+  ac.position.set(0.24, -0.4, -0.5);
+  ac.userData.part = "Klima kompresörü";
+  const clutch = add(new THREE.CylinderGeometry(0.07, 0.07, 0.03, 16), steel);
+  clutch.rotation.x = Math.PI / 2;
+  clutch.position.set(0.24, -0.4, -0.58);
+  const pivot = { x: -0.18, y: -0.4 };
+  const arm = add(new THREE.BoxGeometry(0.16, 0.02, 0.018), steel);
+  arm.position.set((pivot.x - 0.3) / 2, (pivot.y - 0.46) / 2, z + 0.02);
+  arm.rotation.z = Math.atan2(-0.46 - pivot.y, -0.3 - pivot.x);
+  const spring = add(new THREE.CylinderGeometry(0.012, 0.012, 0.1, 8), steel);
+  spring.position.set(-0.16, -0.34, z + 0.015);
+  spring.rotation.z = 0.5;
+}
+
+function beltPoints(pulleys: { x: number; y: number; r: number }[]): { x: number; y: number }[] {
+  const cx = pulleys.reduce((s, p) => s + p.x, 0) / pulleys.length;
+  const cy = pulleys.reduce((s, p) => s + p.y, 0) / pulleys.length;
+  const ordered = [...pulleys].sort((a, b) => Math.atan2(a.y - cy, a.x - cx) - Math.atan2(b.y - cy, b.x - cx));
+  const n = ordered.length;
+  const tangent = (a: (typeof ordered)[0], b: (typeof ordered)[0]) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const dist = Math.hypot(dx, dy);
+    const theta = Math.atan2(dy, dx);
+    const beta = Math.acos(Math.max(-1, Math.min(1, (a.r - b.r) / dist)));
+    let best: { p1: { x: number; y: number }; p2: { x: number; y: number }; dist: number } | null = null;
+    for (const sign of [1, -1]) {
+      const ang = theta + sign * beta;
+      const p1 = { x: a.x + a.r * Math.cos(ang), y: a.y + a.r * Math.sin(ang) };
+      const p2 = { x: b.x + b.r * Math.cos(ang), y: b.y + b.r * Math.sin(ang) };
+      const out = Math.hypot((p1.x + p2.x) / 2 - cx, (p1.y + p2.y) / 2 - cy);
+      if (!best || out > best.dist) best = { p1, p2, dist: out };
+    }
+    return best!;
+  };
+  const legs = ordered.map((p, i) => tangent(p, ordered[(i + 1) % n]));
+  const pts: { x: number; y: number }[] = [];
+  for (let i = 0; i < n; i++) {
+    const c = ordered[i];
+    const incoming = legs[(i - 1 + n) % n];
+    const outgoing = legs[i];
+    const a0 = Math.atan2(incoming.p2.y - c.y, incoming.p2.x - c.x);
+    const a1 = Math.atan2(outgoing.p1.y - c.y, outgoing.p1.x - c.x);
+    let sweep = a1 - a0;
+    while (sweep < 0) sweep += Math.PI * 2;
+    if (sweep > Math.PI) sweep -= Math.PI * 2;
+    const midDist = (sw: number) => {
+      const a = a0 + sw / 2;
+      return Math.hypot(c.x + c.r * Math.cos(a) - cx, c.y + c.r * Math.sin(a) - cy);
+    };
+    const other = sweep > 0 ? sweep - Math.PI * 2 : sweep + Math.PI * 2;
+    const use = midDist(sweep) >= midDist(other) ? sweep : other;
+    const steps = Math.max(3, Math.ceil(Math.abs(use) / 0.28));
+    for (let s = 0; s <= steps; s++) {
+      const a = a0 + use * (s / steps);
+      pts.push({ x: c.x + c.r * Math.cos(a), y: c.y + c.r * Math.sin(a) });
+    }
+    const next = incoming && outgoing;
+    if (next) {
+      const a = outgoing.p1;
+      const b = outgoing.p2;
+      pts.push({ x: a.x * 0.35 + b.x * 0.65, y: a.y * 0.35 + b.y * 0.65 });
+    }
+  }
+  return pts;
 }
 
 function bakeCavity(geo: THREE.BufferGeometry): void {
