@@ -271,7 +271,7 @@ function k24Material(
     color: 0xb7b7b7,
     metalness: 0.42,
     vertexColors: true,
-    envMapIntensity: 0.42,
+    envMapIntensity: 0.7,
     roughness: 0.78,
   });
   mat.customProgramCacheKey = () => "k24-triplanar";
@@ -325,8 +325,8 @@ function k24Material(
           tint = mix(tint, vec3(0.03, 0.03, 0.03), belt);
           vec3 tex = mix(iron, alu, smoothstep(0.5, 0.75, h) * 0.55);
           float stain = sin(vLPos.x * 37.0) * sin(vLPos.z * 23.0 + vLPos.y * 11.0);
-          float oil = smoothstep(0.35, 0.8, stain) * smoothstep(0.18, 0.4, h) * (1.0 - smoothstep(0.7, 0.88, h));
-          tint = mix(tint, tint * vec3(0.42, 0.38, 0.28), oil * 0.7);
+          float oil = smoothstep(0.1, 0.65, stain) * (1.0 - smoothstep(0.02, 0.46, h));
+          tint = mix(tint, tint * vec3(0.28, 0.24, 0.16), oil * 0.92);
           float ao = clamp(vColor.r, 0.0, 1.0);
           // color_fragment already multiplied vColor. Swap that for a 70% blend so crevices stay open.
           diffuseColor.rgb *= mix(1.0, ao, 0.7) / max(ao, 0.02);

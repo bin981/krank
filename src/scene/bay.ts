@@ -46,9 +46,25 @@ export function mountProceduralBay(bay: THREE.Object3D, loader: GLTFLoader): THR
 }
 
 function buildShell(root: THREE.Group): void {
-  const plastic = new THREE.MeshStandardMaterial({ color: 0x1a1c1f, roughness: 0.62, metalness: 0.06 });
-  const steel = new THREE.MeshStandardMaterial({ color: 0x8a9094, roughness: 0.38, metalness: 0.78 });
-  const rubber = new THREE.MeshStandardMaterial({ color: 0x161616, roughness: 0.92, metalness: 0 });
+  const plastic = new THREE.MeshStandardMaterial({
+    color: 0x1a1a1a,
+    roughness: 0.78,
+    metalness: 0.04,
+    envMapIntensity: 0.55,
+    roughnessMap: dustMap(),
+  });
+  void new THREE.TextureLoader()
+    .loadAsync(`${import.meta.env.BASE_URL}textures/bay/SurfaceImperfections008/color.webp`)
+    .then((tex) => {
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(2, 2);
+      tex.colorSpace = THREE.NoColorSpace;
+      plastic.roughnessMap = tex;
+      plastic.needsUpdate = true;
+    })
+    .catch(() => undefined);
+  const steel = wornBolt();
+  const rubber = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.92, metalness: 0, roughnessMap: dustMap() });
   const satin = satinSteel(0x1c1e22);
   const bodyPaint = satinSteel(0x1a4f86);
   const add = (mesh: THREE.Mesh, part?: string) => {
@@ -131,10 +147,10 @@ function strutSide(x: number, body: THREE.Material, steel: THREE.Material, rubbe
   }
   const liner = new THREE.Mesh(
     new THREE.SphereGeometry(0.36, 16, 12, x > 0 ? 0.15 : Math.PI * 0.85, Math.PI * 0.55, 0.55, 1.1),
-    new THREE.MeshStandardMaterial({ color: 0x121416, roughness: 0.86, metalness: 0.02 }),
+    grimePlastic(),
   );
-  liner.scale.set(0.55, 0.7, 0.95);
-  liner.position.set(x * 1.22, -0.08, 0.12);
+  liner.scale.set(x > 0 ? 0.38 : 0.55, 0.62, 0.85);
+  liner.position.set(x * (x > 0 ? 1.38 : 1.22), -0.08, 0.12);
   liner.userData.part = "Çamurluk davlumbazı";
   g.add(liner);
   g.traverse((obj) => {
@@ -358,9 +374,9 @@ function placeRealParts(root: THREE.Object3D, kit: BayKit): void {
   const rubber = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.9, metalness: 0 });
 
   const box = prep(kit.transaxle);
-  box.scale.setScalar(0.7);
+  box.scale.setScalar(1);
   box.rotation.y = Math.PI;
-  box.position.set(0.49, -0.16, 0.04);
+  box.position.set(0.54, -0.16, 0.04);
   box.userData.part = "Şanzıman";
   root.add(box);
 
@@ -459,6 +475,88 @@ function shortenWasherNeck(root: THREE.Object3D): void {
   });
 }
 
+function dustMap(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 128;
+  const g = canvas.getContext("2d");
+  if (g) {
+    g.fillStyle = "#b8b8b8";
+    g.fillRect(0, 0, 128, 128);
+    for (let i = 0; i < 220; i++) {
+      const v = 40 + Math.random() * 180;
+      g.fillStyle = `rgba(${v},${v},${v},0.45)`;
+      g.beginPath();
+      g.arc(Math.random() * 128, Math.random() * 128, 0.6 + Math.random() * 2.4, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(3, 3);
+  tex.colorSpace = THREE.NoColorSpace;
+  return tex;
+}
+
+function grimePlastic(): THREE.MeshStandardMaterial {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 128;
+  const g = canvas.getContext("2d");
+  if (g) {
+    g.fillStyle = "#1a1a1a";
+    g.fillRect(0, 0, 128, 128);
+    const dirt = g.createLinearGradient(0, 0, 0, 128);
+    dirt.addColorStop(0, "rgba(0,0,0,0)");
+    dirt.addColorStop(0.45, "rgba(40,32,22,0.05)");
+    dirt.addColorStop(1, "rgba(70,54,32,0.72)");
+    g.fillStyle = dirt;
+    g.fillRect(0, 0, 128, 128);
+  }
+  const map = new THREE.CanvasTexture(canvas);
+  map.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.MeshStandardMaterial({
+    map,
+    color: 0xffffff,
+    roughness: 0.86,
+    metalness: 0.02,
+    roughnessMap: dustMap(),
+    envMapIntensity: 0.35,
+  });
+  void new THREE.TextureLoader()
+    .loadAsync(`${import.meta.env.BASE_URL}textures/bay/SurfaceImperfections008/color.webp`)
+    .then((tex) => {
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(2, 2);
+      tex.colorSpace = THREE.NoColorSpace;
+      mat.roughnessMap = tex;
+      mat.needsUpdate = true;
+    })
+    .catch(() => undefined);
+  return mat;
+}
+
+function wornBolt(): THREE.MeshStandardMaterial {
+  const canvas = document.createElement("canvas");
+  canvas.width = 32;
+  canvas.height = 64;
+  const g = canvas.getContext("2d");
+  if (g) {
+    g.fillStyle = "#8e8e8e";
+    g.fillRect(0, 0, 32, 64);
+    g.fillStyle = "#2e2e2e";
+    g.fillRect(0, 0, 32, 7);
+    g.fillRect(0, 57, 32, 7);
+  }
+  const rough = new THREE.CanvasTexture(canvas);
+  rough.colorSpace = THREE.NoColorSpace;
+  return new THREE.MeshStandardMaterial({
+    color: 0xc8b89a,
+    roughness: 0.5,
+    metalness: 0.84,
+    roughnessMap: rough,
+    envMapIntensity: 0.7,
+  });
+}
+
 function satinSteel(hex: number): THREE.MeshStandardMaterial {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 128;
@@ -475,14 +573,20 @@ function satinSteel(hex: number): THREE.MeshStandardMaterial {
     const dirt = g.createLinearGradient(0, 0, 0, 128);
     dirt.addColorStop(0, "rgba(0,0,0,0)");
     dirt.addColorStop(0.62, "rgba(0,0,0,0)");
-    dirt.addColorStop(1, "rgba(20,16,12,0.38)");
+    dirt.addColorStop(1, "rgba(48,36,22,0.62)");
     g.fillStyle = dirt;
     g.fillRect(0, 0, 128, 128);
   }
   const map = new THREE.CanvasTexture(canvas);
   map.wrapS = map.wrapT = THREE.RepeatWrapping;
   map.colorSpace = THREE.SRGBColorSpace;
-  return new THREE.MeshStandardMaterial({ map, color: 0xffffff, roughness: 0.58, metalness: 0.18 });
+  return new THREE.MeshStandardMaterial({
+    map,
+    color: 0xffffff,
+    roughness: 0.48,
+    metalness: 0.32,
+    envMapIntensity: 0.85,
+  });
 }
 
 function placeBattery(root: THREE.Object3D, template: THREE.Object3D): void {

@@ -24,6 +24,11 @@ export class Garage {
   private k24Root: THREE.Object3D | null = null;
   private k24Height = 0.55;
   private loader: GLTFLoader | null = null;
+  private hoodStrut: THREE.Mesh | null = null;
+  private workLamp: THREE.SpotLight | null = null;
+  private readonly strutLocal = new THREE.Vector3(0.4, -0.15, 0.35);
+  private readonly strutAnchor = new THREE.Vector3();
+  private readonly strutDir = new THREE.Vector3();
   private readonly tools = new Map<string, THREE.Object3D>();
   private activeTool = "10";
   benchTop = new THREE.Vector3(3.2, 0.92, -1.2);
@@ -58,7 +63,17 @@ export class Garage {
     if (!this.bonnet) return;
     this.hoodOpen += (this.hoodTarget - this.hoodOpen) * Math.min(1, dt * 3.2);
     this.bonnet.rotation.x = -this.hoodOpen * 1.05;
+    if (this.hoodStrut) {
+      const top = this.bonnet.localToWorld(this.strutLocal.clone());
+      const len = this.strutDir.subVectors(this.strutAnchor, top).length();
+      this.hoodStrut.position.copy(top).addScaledVector(this.strutDir, 0.5);
+      this.hoodStrut.quaternion.setFromUnitVectors(Garage.up, this.strutDir.normalize());
+      this.hoodStrut.scale.set(1, Math.max(0.05, len), 1);
+      this.hoodStrut.visible = this.hoodOpen > 0.2;
+    }
   }
+
+  private static readonly up = new THREE.Vector3(0, 1, 0);
 
   private async load(renderer: THREE.WebGLRenderer): Promise<void> {
     try {
@@ -168,6 +183,13 @@ export class Garage {
     sedan.add(this.bay);
     sedan.updateWorldMatrix(true, true);
     this.focus.copy(this.bay.getWorldPosition(new THREE.Vector3()));
+    this.strutAnchor.copy(this.bay.localToWorld(new THREE.Vector3(0.42, 0.02, 0.18)));
+    if (this.workLamp) {
+      const target = new THREE.Object3D();
+      target.position.set(0, 0.06, 0.08);
+      this.bay.add(target);
+      this.workLamp.target = target;
+    }
   }
 
   private place(): void {
@@ -193,7 +215,7 @@ export class Garage {
     const phone = window.matchMedia("(max-width: 840px)").matches;
     if (!this.k24Task) {
       this.k24Task = loadK24Scan(phone).then((scan) => {
-        scan.object.position.set(-0.02, -0.2, 0.02);
+        scan.object.position.set(-0.06, -0.2, 0.02);
         this.bay.add(scan.object);
         this.k24Root = scan.object;
         this.k24Height = scan.height;
@@ -222,26 +244,138 @@ export class Garage {
 
   private dressHood(bonnet: THREE.Object3D): void {
     bonnet.updateWorldMatrix(true, true);
-    const box = new THREE.Box3().setFromObject(bonnet);
-    box.applyMatrix4(bonnet.matrixWorld.clone().invert());
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    const fibre = new THREE.MeshStandardMaterial({ color: 0x2c2824, roughness: 0.96, metalness: 0 });
-    const ribMat = new THREE.MeshStandardMaterial({ color: 0x1a1c1e, roughness: 0.55, metalness: 0.35 });
-    const pad = new THREE.Mesh(new THREE.BoxGeometry(size.x * 0.7, 0.01, size.z * 0.55), fibre);
-    pad.position.set(center.x, box.min.y - 0.006, center.z + size.z * 0.05);
-    pad.userData.part = "Kaput yalıtımı";
-    bonnet.add(pad);
-    for (const dx of [-0.28, 0.28]) {
-      const rib = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.012, size.z * 0.5), ribMat);
-      rib.position.set(center.x + dx, box.min.y - 0.012, center.z);
-      bonnet.add(rib);
+    const inv = bonnet.matrixWorld.clone().invert();
+    const step = 0.08;
+    const cells = new Map<string, { y: number; n: number }>();
+    const v = new THREE.Vector3();
+    const normal = new THREE.Vector3();
+    bonnet.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh || mesh.name.startsWith("washer")) return;
+      const pos = mesh.geometry.getAttribute("position");
+      const nor = mesh.geometry.getAttribute("normal");
+      if (!pos || !nor) return;
+      for (let i = 0; i < pos.count; i += 4) {
+        normal.fromBufferAttribute(nor, i).transformDirection(mesh.matrixWorld);
+        if (normal.y > -0.45) continue;
+        v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld).applyMatrix4(inv);
+        if (v.z < 0.08 || v.z > 1.05 || Math.abs(v.x) > 0.58) continue;
+        const ix = Math.round(v.x / step);
+        const iz = Math.round(v.z / step);
+        const key = `${ix},${iz}`;
+        const cell = cells.get(key);
+        if (!cell) cells.set(key, { y: v.y, n: 1 });
+        else {
+          cell.y += v.y;
+          cell.n += 1;
+        }
+      }
+    });
+    const fibre = new THREE.MeshStandardMaterial({ color: 0x2a261f, roughness: 0.96, metalness: 0 });
+    const ribMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.55, metalness: 0.35, envMapIntensity: 0.4 });
+    const at = (ix: number, iz: number) => cells.get(`${ix},${iz}`);
+    const positions: number[] = [];
+    const indices: number[] = [];
+    const indexOf = new Map<string, number>();
+    const vertex = (ix: number, iz: number, y: number) => {
+      const key = `${ix},${iz}`;
+      const existing = indexOf.get(key);
+      if (existing != null) return existing;
+      const id = positions.length / 3;
+      indexOf.set(key, id);
+      positions.push(ix * step, y - 0.01, iz * step);
+      return id;
+    };
+    let ySum = 0;
+    let yCount = 0;
+    for (const [key, cell] of cells) {
+      const [ix, iz] = key.split(",").map(Number);
+      const y = cell.y / cell.n;
+      ySum += y;
+      yCount += 1;
+      const right = at(ix + 1, iz);
+      const up = at(ix, iz + 1);
+      const diag = at(ix + 1, iz + 1);
+      if (!right || !up || !diag) continue;
+      const a = vertex(ix, iz, y);
+      const b = vertex(ix + 1, iz, right.y / right.n);
+      const c = vertex(ix + 1, iz + 1, diag.y / diag.n);
+      const d = vertex(ix, iz + 1, up.y / up.n);
+      indices.push(a, b, c, a, c, d);
     }
-    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.42, 8), ribMat);
-    strut.position.set(center.x + size.x * 0.32, box.min.y - 0.16, center.z + size.z * 0.15);
-    strut.rotation.x = 0.7;
+    if (indices.length > 0) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      const pad = new THREE.Mesh(geo, fibre);
+      pad.userData.part = "Kaput yalıtımı";
+      pad.castShadow = false;
+      pad.receiveShadow = true;
+      bonnet.add(pad);
+      const yOf = (x: number, z: number) => {
+        const ix = Math.round(x / step);
+        const iz = Math.round(z / step);
+        const cell = at(ix, iz) ?? at(ix, iz + 1) ?? at(ix, iz - 1);
+        return (cell ? cell.y / cell.n : ySum / Math.max(1, yCount)) - 0.016;
+      };
+      const bar = (x0: number, z0: number, x1: number, z1: number, hole: boolean) => {
+        const y = (yOf(x0, z0) + yOf(x1, z1)) / 2;
+        const dx = x1 - x0;
+        const dz = z1 - z0;
+        const len = Math.hypot(dx, dz);
+        if (len < 0.03) return;
+        const shape = new THREE.Shape();
+        shape.moveTo(-len / 2, -0.008);
+        shape.lineTo(len / 2, -0.008);
+        shape.lineTo(len / 2, 0.008);
+        shape.lineTo(-len / 2, 0.008);
+        if (hole && len > 0.07) {
+          const path = new THREE.Path();
+          path.absellipse(0, 0, Math.min(0.012, len * 0.22), 0.005, 0, Math.PI * 2, false, 0);
+          shape.holes.push(path);
+        }
+        const extruded = new THREE.ExtrudeGeometry(shape, { depth: 0.004, bevelEnabled: false });
+        extruded.rotateX(-Math.PI / 2);
+        const mesh = new THREE.Mesh(extruded, ribMat);
+        mesh.position.set((x0 + x1) / 2, y, (z0 + z1) / 2);
+        mesh.rotation.y = Math.atan2(-dz, dx);
+        mesh.castShadow = false;
+        mesh.receiveShadow = true;
+        bonnet.add(mesh);
+      };
+      const xs = [-0.5, 0.5];
+      for (const x of xs) {
+        for (let z = 0.16; z < 0.96; z += 0.12) bar(x, z, x, z + 0.12, true);
+      }
+      for (let x = -0.5; x < 0.5; x += 0.16) {
+        bar(x, 0.16, x + 0.16, 0.16, true);
+        bar(x, 0.96, x + 0.16, 0.96, true);
+      }
+      for (let t = 0; t < 1; t += 0.14) {
+        const x0 = -0.42 + t * 0.84;
+        const z0 = 0.22 + t * 0.68;
+        bar(x0, z0, x0 + 0.12, z0 + 0.1, false);
+        bar(-x0, z0, -x0 - 0.12, z0 + 0.1, false);
+      }
+      this.strutLocal.set(0.48, yOf(0.48, 0.28), 0.28);
+    }
+    const strutMat = new THREE.MeshStandardMaterial({ color: 0x2c3136, roughness: 0.42, metalness: 0.72, envMapIntensity: 0.6 });
+    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 1, 10), strutMat);
     strut.userData.part = "Kaput amortisörü";
-    bonnet.add(strut);
+    strut.castShadow = true;
+    this.hoodStrut = strut;
+    this.group.add(strut);
+    const phone = window.matchMedia("(max-width: 840px)").matches;
+    const lamp = new THREE.SpotLight(0xffc48a, phone ? 90 : 420, 2.6, 0.58, 0.5, 2);
+    lamp.position.set(0, this.strutLocal.y - 0.02, 0.55);
+    lamp.castShadow = !phone;
+    lamp.shadow.mapSize.set(1024, 1024);
+    lamp.shadow.bias = -0.001;
+    lamp.shadow.normalBias = 0.02;
+    lamp.name = "hood-lamp";
+    bonnet.add(lamp);
+    this.workLamp = lamp;
   }
 
   private dress(root: THREE.Object3D, car = false): void {
@@ -255,20 +389,41 @@ export class Garage {
         const mat = m as THREE.MeshStandardMaterial;
         if (!mat?.isMaterial) continue;
         if (typeof mat.emissiveIntensity === "number" && mat.emissiveIntensity > 0.8) mat.emissiveIntensity = 0.35;
-        // Body paint is a KTX2 with a red smear on one side. Drop it for a solid clearcoat.
-        const paint = car && (mat.name.includes("paint") || mat.map != null);
-        if (paint) {
+        if (!car) continue;
+        if (/glass|windshield|lens/.test(mat.name) && !mat.name.includes("paint")) {
+          mat.color.set(0x1e3338);
+          mat.metalness = 0;
+          mat.roughness = 0.06;
+          mat.envMapIntensity = 1.5;
+          const glass = mat as THREE.MeshPhysicalMaterial;
+          if (glass.isMeshPhysicalMaterial) {
+            glass.transmission = 0.62;
+            glass.thickness = 0.04;
+            glass.ior = 1.5;
+            glass.attenuationColor = new THREE.Color(0x0c1c22);
+            glass.attenuationDistance = 0.35;
+          }
+          mat.needsUpdate = true;
+        } else if (/trim|chrome/.test(mat.name) && !mat.name.includes("paint")) {
+          mat.map = null;
+          mat.color.set(0x1c1e22);
+          mat.metalness = 0.72;
+          mat.roughness = 0.32;
+          mat.envMapIntensity = 0.9;
+          mat.needsUpdate = true;
+        } else if (mat.name.includes("paint")) {
           mat.map = null;
           mat.aoMap = null;
-          if (mat.name.includes("paint")) {
-            mat.color.set(0x1a4f86);
-            mat.metalness = 0.48;
-            mat.roughness = 0.36;
-            const coat = mat as THREE.MeshPhysicalMaterial;
-            if (coat.isMeshPhysicalMaterial) {
-              coat.clearcoat = 0.4;
-              coat.clearcoatRoughness = 0.28;
-            }
+          mat.color.set(0x1a4f86);
+          mat.metalness = 0.62;
+          mat.roughness = 0.22;
+          mat.envMapIntensity = 1.2;
+          const coat = mat as THREE.MeshPhysicalMaterial;
+          if (coat.isMeshPhysicalMaterial) {
+            coat.clearcoat = 1;
+            coat.clearcoatRoughness = 0.06;
+            coat.clearcoatNormalMap = flakeNormal();
+            coat.clearcoatNormalScale.set(0.18, 0.18);
           }
           mat.needsUpdate = true;
         }
@@ -282,6 +437,30 @@ export class Garage {
     const h = box.getSize(new THREE.Vector3()).y || 1;
     obj.scale.setScalar(target / h);
   }
+}
+
+function flakeNormal(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 64;
+  const g = canvas.getContext("2d");
+  if (g) {
+    const img = g.createImageData(64, 64);
+    for (let i = 0; i < 64 * 64; i++) {
+      const nx = (Math.random() - 0.5) * 0.45;
+      const ny = (Math.random() - 0.5) * 0.45;
+      const nz = Math.sqrt(Math.max(0.05, 1 - nx * nx - ny * ny));
+      img.data[i * 4] = (nx * 0.5 + 0.5) * 255;
+      img.data[i * 4 + 1] = (ny * 0.5 + 0.5) * 255;
+      img.data[i * 4 + 2] = (nz * 0.5 + 0.5) * 255;
+      img.data[i * 4 + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(22, 22);
+  tex.colorSpace = THREE.NoColorSpace;
+  return tex;
 }
 
 export function concreteMaterial(set: MapSet): THREE.MeshStandardMaterial {

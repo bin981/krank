@@ -55,13 +55,13 @@ export class Studio {
     this.renderer = graphics.renderer;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, graphics.lite ? 1.25 : 1.75));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.78;
+    this.renderer.toneMapping = THREE.AgXToneMapping;
+    this.renderer.toneMappingExposure = 0.95;
     this.renderer.localClippingEnabled = true;
     this.renderer.shadowMap.enabled = !graphics.lite;
-    if (!graphics.lite) this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    if (!graphics.lite) this.renderer.shadowMap.type = THREE.PCFShadowMap;
 
-    this.camera = new THREE.PerspectiveCamera(38, 1, 0.05, 160);
+    this.camera = new THREE.PerspectiveCamera(46, 1, 0.05, 160);
     this.scene.background = new THREE.Color(0x242220);
 
     const phone = graphics.lite || window.matchMedia("(max-width: 840px)").matches;
@@ -71,7 +71,7 @@ export class Studio {
       const pmrem = new THREE.PMREMGenerator(this.renderer);
       this.scene.environment = pmrem.fromEquirectangular(tex).texture;
       this.scene.background = tex;
-      this.renderer.toneMappingExposure = phone ? 0.92 : 0.84;
+      this.renderer.toneMappingExposure = phone ? 1.05 : 1;
       pmrem.dispose();
     });
     this.garage = new Garage(this.renderer);
@@ -94,15 +94,29 @@ export class Studio {
     if (!graphics.lite) {
       key.castShadow = true;
       key.shadow.mapSize.set(2048, 2048);
-      key.shadow.camera.near = 0.5;
-      key.shadow.camera.far = 28;
-      key.shadow.camera.left = -12;
-      key.shadow.camera.right = 12;
-      key.shadow.camera.top = 12;
-      key.shadow.camera.bottom = -12;
-      key.shadow.bias = -0.00035;
+      key.shadow.camera.near = 0.4;
+      key.shadow.camera.far = 18;
+      key.shadow.camera.left = -5;
+      key.shadow.camera.right = 5;
+      key.shadow.camera.top = 5;
+      key.shadow.camera.bottom = -5;
+      key.shadow.bias = -0.00015;
+      key.shadow.radius = 2;
+      key.shadow.blurSamples = 8;
     }
     this.scene.add(key);
+    const aim = this.garage.onReady;
+    this.garage.onReady = (center) => {
+      aim?.(center);
+      key.target.position.copy(center);
+      this.scene.add(key.target);
+      const cam = key.shadow.camera;
+      cam.left = -2.4;
+      cam.right = 2.4;
+      cam.top = 2.2;
+      cam.bottom = -1.6;
+      cam.updateProjectionMatrix();
+    };
     this.scene.add(new THREE.AmbientLight(0xd7d2c4, 0.08));
     this.scene.add(new THREE.HemisphereLight(0xc9d4e4, 0x2a261c, 0.18));
     const rim = new THREE.DirectionalLight(0xc5dcff, 0.22);
@@ -152,7 +166,7 @@ export class Studio {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
     this.controls.maxPolarAngle = Math.PI * 0.49;
-    this.controls.minDistance = 2.35;
+    this.controls.minDistance = 1.15;
     this.controls.maxDistance = 28;
     this.controls.target.copy(this.center);
     this.controls.addEventListener("start", () => {
@@ -183,9 +197,9 @@ export class Studio {
       this.composer = new EffectComposer(this.renderer);
       this.composer.addPass(new RenderPass(this.scene, this.camera));
       this.ssao = new SSAOPass(this.scene, this.camera, 512, 512, 16);
-      this.ssao.kernelRadius = 12;
-      this.ssao.minDistance = 0.002;
-      this.ssao.maxDistance = 0.16;
+      this.ssao.kernelRadius = 4;
+      this.ssao.minDistance = 0.001;
+      this.ssao.maxDistance = 0.04;
       this.composer.addPass(this.ssao);
       this.composer.addPass(new OutputPass());
     }
@@ -200,8 +214,8 @@ export class Studio {
     this.engine = engine;
     this.garage.mount(engine);
     if (this.pbr) engine.applyPbr(this.pbr);
-    this.dist = 9.4;
-    this.frameTo(this.shorts ? "shorts" : this.preset === "shorts" ? "threequarter" : this.preset, true);
+    this.dist = 1.55;
+    this.frameTo(this.shorts ? "shorts" : "front", true);
     engine.refreshBadge();
   }
 
@@ -215,24 +229,25 @@ export class Studio {
 
   setShorts(on: boolean): void {
     this.shorts = on;
-    this.camera.fov = on ? 30 : 34;
+    this.camera.fov = on ? 44 : 46;
     this.camera.updateProjectionMatrix();
     if (!on && this.preset === "cine") this.preset = "threequarter";
-    if (this.preset !== "cine") this.frameTo(on ? "shorts" : "threequarter", false);
+    if (this.preset !== "cine") this.frameTo(on ? "shorts" : "front", false);
     this.resize();
   }
 
   frameTo(preset: CameraPreset, instant = false): void {
     this.preset = preset;
     const t = this.center.clone();
+    if (preset === "front" || preset === "shorts") t.y += 0.16;
     const d = this.dist;
     const pos = new THREE.Vector3();
-    if (preset === "side") pos.set(d * 1.2, t.y + d * 0.05, 0.2);
-    else if (preset === "top") pos.set(0.15, t.y + d * 1.15, 0.15);
-    else if (preset === "front") pos.set(t.x * 0.2, t.y + d * 0.05, d * 1.05);
-    else if (preset === "shorts") pos.set(t.x + d * 0.38, t.y + d * 0.02, d * 0.58);
-    else if (preset === "cine") pos.set(t.x + d * 0.15, t.y + d * 0.16, d * 0.95);
-    else pos.set(t.x + d * 0.78, t.y + d * 0.34, t.z + d * 0.86);
+    if (preset === "side") pos.set(t.x + d * 1.2, t.y + 0.15, t.z);
+    else if (preset === "top") pos.set(t.x, t.y + 1.7, t.z + 1.55);
+    else if (preset === "front") pos.set(t.x + 0.28, t.y + 0.82, t.z + 1.22);
+    else if (preset === "shorts") pos.set(t.x, t.y + 0.7, t.z + 1.65);
+    else if (preset === "cine") pos.set(t.x + 0.2, t.y + 0.28, t.z + 1.15);
+    else pos.set(t.x + 2.4, t.y + 1.15, t.z + 2.6);
     if (instant) {
       this.camera.position.copy(pos);
       this.controls.target.copy(t);
