@@ -2,6 +2,10 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { loadPbr, type PbrLibrary } from "./pbr";
 import type { Simulation } from "../engine/sim";
 import type { ViewState } from "../view";
@@ -33,6 +37,8 @@ export class Studio {
   private interacting = false;
   private readonly garage: Garage;
   private pbr: PbrLibrary | null = null;
+  private composer: EffectComposer | null = null;
+  private ssao: SSAOPass | null = null;
   readonly engineRoot = (): EngineAssembly | null => this.engine;
 
   toggleHood(): void {
@@ -173,6 +179,16 @@ export class Studio {
       this.controls.target.set(tx, ty, tz);
       this.controls.update();
     };
+    if (!graphics.lite) {
+      this.composer = new EffectComposer(this.renderer);
+      this.composer.addPass(new RenderPass(this.scene, this.camera));
+      this.ssao = new SSAOPass(this.scene, this.camera, 512, 512, 16);
+      this.ssao.kernelRadius = 12;
+      this.ssao.minDistance = 0.002;
+      this.ssao.maxDistance = 0.16;
+      this.composer.addPass(this.ssao);
+      this.composer.addPass(new OutputPass());
+    }
     this.resize();
   }
 
@@ -233,6 +249,8 @@ export class Studio {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);
+    this.composer?.setSize(w, h);
+    this.ssao?.setSize(w, h);
     this.css.setSize(w, h);
   }
 
@@ -263,7 +281,8 @@ export class Studio {
     if (this.engine) this.engine.hoverName = this.hover;
     this.garage.update(dt);
     this.engine?.update(sim, view, dt, this.fireLight);
-    this.renderer.render(this.scene, this.camera);
+    if (this.composer) this.composer.render();
+    else this.renderer.render(this.scene, this.camera);
     this.css.render(this.scene, this.camera);
   }
 

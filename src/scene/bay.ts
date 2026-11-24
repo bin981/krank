@@ -65,7 +65,9 @@ function buildShell(root: THREE.Group): void {
     add(new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.035, 0.78), steel)).position.set(x, -0.2, 0.04);
   }
 
-  buildFirewall(add, satin, rubber);
+  buildFirewall(add, satin, rubber, steel);
+  buildCoreSupport(add, plastic, steel, rubber);
+  buildSubframe(add, steel);
   for (const x of [-0.48, 0.48] as const) {
     const side = strutSide(x, bodyPaint, steel, rubber);
     root.add(side);
@@ -90,47 +92,51 @@ function buildShell(root: THREE.Group): void {
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.set(0, -0.2, 0.02);
   root.add(shadow);
-  const lamp = new THREE.PointLight(0xfff2e0, 0.55, 2.2, 2);
-  lamp.position.set(0.05, 0.42, 0.12);
+  const lamp = new THREE.PointLight(0xfff2e0, 0.28, 1.8, 2);
+  lamp.position.set(0.05, 0.36, 0.22);
   root.add(lamp);
 }
 
 function strutSide(x: number, body: THREE.Material, steel: THREE.Material, rubber: THREE.Material): THREE.Group {
   const g = new THREE.Group();
-  const apron = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.2, 0.58), body);
-  apron.position.set(x, -0.08, 0.06);
+  const apron = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.14, 0.62), body);
+  apron.position.set(x * 0.86, -0.08, 0.08);
   apron.userData.part = "İç çamurluk";
+  const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.02, 0.62), body);
+  shelf.position.set(x * 0.98, -0.015, 0.08);
+  // Low stamped dome: about 10 cm above the apron, 15 cm top plate. No cone.
   const domePts = [
-    new THREE.Vector2(0.18, 0),
-    new THREE.Vector2(0.16, 0.03),
-    new THREE.Vector2(0.1, 0.1),
-    new THREE.Vector2(0.07, 0.2),
-    new THREE.Vector2(0.062, 0.25),
-    new THREE.Vector2(0.095, 0.268),
-    new THREE.Vector2(0.014, 0.28),
+    new THREE.Vector2(0.155, 0),
+    new THREE.Vector2(0.148, 0.012),
+    new THREE.Vector2(0.11, 0.04),
+    new THREE.Vector2(0.078, 0.072),
+    new THREE.Vector2(0.074, 0.09),
+    new THREE.Vector2(0.02, 0.1),
   ];
-  const dome = new THREE.Mesh(new THREE.LatheGeometry(domePts, 32), body);
-  dome.position.set(x * 0.9, -0.1, 0.16);
+  const dome = new THREE.Mesh(new THREE.LatheGeometry(domePts, 36), body);
+  dome.position.set(x * 0.95, -0.015, 0.14);
   dome.userData.part = "Amortisör kulesi";
-  const bead = new THREE.Mesh(new THREE.TorusGeometry(0.145, 0.008, 6, 24), rubber);
+  const bead = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.006, 6, 28), rubber);
   bead.rotation.x = Math.PI / 2;
-  bead.position.set(x * 0.9, -0.08, 0.16);
-  const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.062, 0.01, 16), steel);
-  plate.position.set(x * 0.9, 0.19, 0.16);
-  const nut = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.012, 6), steel);
-  nut.position.set(x * 0.9, 0.202, 0.16);
-  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 8), rubber);
-  cap.scale.y = 0.65;
-  cap.position.set(x * 0.9, 0.216, 0.16);
-  g.add(apron, dome, bead, plate, nut, cap);
+  bead.position.set(x * 0.95, -0.01, 0.14);
+  const plate = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 8), body);
+  plate.scale.y = 0.16;
+  plate.position.set(x * 0.95, 0.078, 0.14);
+  g.add(apron, shelf, dome, bead, plate);
   for (let s = 0; s < 3; s++) {
-    const a = (s / 3) * Math.PI * 2 + 0.4;
-    const stud = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.022, 6), steel);
-    stud.position.set(x * 0.9 + Math.cos(a) * 0.04, 0.204, 0.16 + Math.sin(a) * 0.04);
-    const flange = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.006, 6), steel);
-    flange.position.set(stud.position.x, 0.192, stud.position.z);
-    g.add(stud, flange);
+    const a = (s / 3) * Math.PI * 2 + 0.5;
+    const stud = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.012, 6), steel);
+    stud.position.set(x * 0.95 + Math.cos(a) * 0.042, 0.092, 0.14 + Math.sin(a) * 0.042);
+    g.add(stud);
   }
+  const liner = new THREE.Mesh(
+    new THREE.SphereGeometry(0.36, 16, 12, x > 0 ? 0.15 : Math.PI * 0.85, Math.PI * 0.55, 0.55, 1.1),
+    new THREE.MeshStandardMaterial({ color: 0x121416, roughness: 0.86, metalness: 0.02 }),
+  );
+  liner.scale.set(0.55, 0.7, 0.95);
+  liner.position.set(x * 1.22, -0.08, 0.12);
+  liner.userData.part = "Çamurluk davlumbazı";
+  g.add(liner);
   g.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (mesh.isMesh) mesh.castShadow = mesh.receiveShadow = true;
@@ -142,6 +148,7 @@ function buildFirewall(
   add: (mesh: THREE.Mesh, part?: string) => THREE.Mesh,
   satin: THREE.Material,
   rubber: THREE.Material,
+  steel: THREE.Material,
 ): void {
   const panel = add(new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.5, 0.012), satin), "Ateş duvarı");
   panel.position.set(0, 0.04, -0.36);
@@ -153,15 +160,76 @@ function buildFirewall(
   crease.position.set(0, 0.08, -0.346);
   const pad = add(new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.28, 0.016), rubber), "Ateş duvarı yalıtımı");
   pad.position.set(0.02, 0.02, -0.33);
-  const cowl = add(new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.045, 0.09), new THREE.MeshStandardMaterial({ color: 0x141618, roughness: 0.7, metalness: 0.04 })), "Kaput ızgarası");
-  cowl.position.set(0, 0.28, -0.33);
+  const cowlMat = new THREE.MeshStandardMaterial({ color: 0x141618, roughness: 0.72, metalness: 0.04 });
+  const cowl = add(new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.05, 0.16), cowlMat), "Kaput ızgarası");
+  cowl.position.set(0, 0.22, -0.28);
+  const motor = add(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.05), cowlMat), "Silecek motoru");
+  motor.position.set(0.08, 0.2, -0.22);
+  for (const x of [-0.22, 0.28]) {
+    const arm = add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.008, 0.012), steel));
+    arm.position.set(x, 0.22, -0.2);
+  }
+  const loom = add(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.9, 8), rubber), "Kablo demeti");
+  loom.rotation.z = Math.PI / 2;
+  loom.position.set(0, 0.16, -0.34);
+  for (const x of [-0.22, 0.16]) {
+    const hose = add(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.22, 8), rubber), "Kalorifer hortumu");
+    hose.rotation.x = 1.1;
+    hose.position.set(x, 0.06, -0.26);
+  }
   for (const x of [-0.28, 0.22]) {
     const grommet = add(new THREE.Mesh(new THREE.TorusGeometry(0.018, 0.006, 6, 12), rubber));
     grommet.rotation.y = Math.PI / 2;
-    grommet.position.set(x, 0.1, -0.35);
-    const wire = add(new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.16, 7), rubber), "Kablo demeti");
+    grommet.position.set(x, 0.12, -0.35);
+    const wire = add(new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.14, 7), rubber));
     wire.rotation.x = Math.PI / 2;
-    wire.position.set(x, 0.1, -0.27);
+    wire.position.set(x, 0.12, -0.28);
+  }
+}
+
+function buildCoreSupport(
+  add: (mesh: THREE.Mesh, part?: string) => THREE.Mesh,
+  plastic: THREE.Material,
+  steel: THREE.Material,
+  rubber: THREE.Material,
+): void {
+  const dark = new THREE.MeshStandardMaterial({ color: 0x1a1c1f, roughness: 0.62, metalness: 0.22 });
+  const panel = add(new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.2, 0.016), dark), "Ön panel");
+  panel.position.set(0, -0.02, 0.52);
+  for (let i = 0; i < 5; i++) {
+    const rib = add(new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.18, 0.022), dark));
+    rib.position.set(-0.32 + i * 0.16, -0.02, 0.53);
+  }
+  for (const x of [-0.22, 0.22]) {
+    const hole = add(new THREE.Mesh(new THREE.TorusGeometry(0.028, 0.006, 6, 14), dark));
+    hole.position.set(x, -0.02, 0.532);
+  }
+  const latch = add(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.03), steel), "Kaput kilidi");
+  latch.position.set(0, 0.1, 0.53);
+  const hook = add(new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.03, 0.012), steel));
+  hook.position.set(0, 0.13, 0.54);
+  const cable = add(new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.28, 6), rubber), "Kilit teli");
+  cable.rotation.z = Math.PI / 2;
+  cable.position.set(0.16, 0.1, 0.52);
+  const horn = add(new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.03, 12), steel), "Korna");
+  horn.rotation.z = Math.PI / 2;
+  horn.position.set(-0.28, -0.02, 0.5);
+  const guide = add(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.06, 0.04), plastic), "Hava yönlendirici");
+  guide.position.set(0, -0.14, 0.5);
+  guide.rotation.x = -0.4;
+}
+
+function buildSubframe(add: (mesh: THREE.Mesh, part?: string) => THREE.Mesh, steel: THREE.Material): void {
+  const dark = new THREE.MeshStandardMaterial({ color: 0x2a2e32, roughness: 0.7, metalness: 0.45 });
+  const pan = add(new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.012, 0.7), dark), "Motor altlığı");
+  pan.position.set(0.02, -0.28, 0.04);
+  for (const x of [-0.28, 0.3]) {
+    const rail = add(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.78), steel));
+    rail.position.set(x, -0.25, 0.04);
+  }
+  for (const z of [-0.24, 0.32]) {
+    const cross = add(new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.04, 0.05), steel), "Travers");
+    cross.position.set(0.02, -0.24, z);
   }
 }
 
@@ -172,7 +240,7 @@ function buildRadiator(
   steel: THREE.Material,
 ): void {
   const finMat = new THREE.MeshStandardMaterial({
-    color: 0xc5cacd,
+    color: 0x5e656a,
     roughness: 0.38,
     metalness: 0.82,
     normalMap: finNormal(),
@@ -297,37 +365,38 @@ function placeRealParts(root: THREE.Object3D, kit: BayKit): void {
   root.add(box);
 
   const coolant = prep(kit.coolant);
-  coolant.position.set(0.34, 0.0, 0.3);
+  coolant.position.set(0.2, 0.1, 0.46);
+  coolant.rotation.y = -0.5;
   coolant.userData.part = "Genleşme kabı";
   root.add(coolant);
-  const feed = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.16, 8), rubber);
-  feed.rotation.z = Math.PI / 2;
-  feed.position.set(0.24, 0.1, 0.36);
+  const feed = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.14, 8), rubber);
+  feed.rotation.z = 1.1;
+  feed.position.set(0.16, 0.14, 0.4);
   feed.userData.part = "Üst hortum";
   feed.castShadow = true;
   root.add(feed);
 
   const washer = prep(kit.washer);
   shortenWasherNeck(washer);
-  washer.position.set(-0.34, -0.2, 0.26);
-  washer.rotation.y = 0.4;
+  washer.position.set(-0.18, 0.0, 0.48);
+  washer.rotation.y = -0.3;
   washer.userData.part = "Cam suyu";
   root.add(washer);
 
   const master = prep(kit.master);
   master.rotation.y = -Math.PI / 2;
-  master.position.set(-0.16, 0.02, -0.28);
+  master.position.set(-0.3, 0.1, -0.16);
   master.userData.part = "Fren ana merkezi";
   root.add(master);
   const booster = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.115, 0.07, 24), steel);
   booster.rotation.x = Math.PI / 2;
-  booster.position.set(-0.16, 0.08, -0.36);
+  booster.position.set(-0.3, 0.14, -0.28);
   booster.userData.part = "Fren servosu";
   booster.castShadow = true;
   root.add(booster);
-  for (const x of [-0.19, -0.13]) {
-    const line = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.22, 6), steel);
-    line.position.set(x, -0.08, -0.3);
+  for (const x of [-0.33, -0.27]) {
+    const line = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.18, 6), steel);
+    line.position.set(x, 0.0, -0.2);
     line.userData.part = "Fren hattı";
     root.add(line);
   }
@@ -339,8 +408,8 @@ function placeRealParts(root: THREE.Object3D, kit: BayKit): void {
   root.add(boot);
 
   const fuse = prep(kit.fuse);
-  fuse.position.set(-0.22, -0.16, -0.16);
-  fuse.rotation.y = 0.3;
+  fuse.position.set(0.32, 0.02, 0.02);
+  fuse.rotation.y = -0.4;
   fuse.userData.part = "Sigorta kutusu";
   const lid = new THREE.Mesh(
     new THREE.BoxGeometry(0.37, 0.012, 0.17),
@@ -418,8 +487,8 @@ function satinSteel(hex: number): THREE.MeshStandardMaterial {
 
 function placeBattery(root: THREE.Object3D, template: THREE.Object3D): void {
   const bat = template.clone(true);
-  bat.position.set(-0.36, -0.16, -0.2);
-  bat.rotation.y = 0.4;
+  bat.position.set(0.34, -0.02, 0.2);
+  bat.rotation.y = -0.7;
   bat.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh) return;

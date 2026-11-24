@@ -83,6 +83,7 @@ export class Garage {
       this.dress(sedan, true);
       this.group.add(sedan);
       this.bonnet = sedan.getObjectByName("bonnet") ?? null;
+      if (this.bonnet) this.dressHood(this.bonnet);
       this.fitEngineBay(sedan);
       this.ready = true;
       this.place();
@@ -218,6 +219,30 @@ export class Garage {
     }
   }
 
+
+  private dressHood(bonnet: THREE.Object3D): void {
+    bonnet.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(bonnet);
+    box.applyMatrix4(bonnet.matrixWorld.clone().invert());
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const fibre = new THREE.MeshStandardMaterial({ color: 0x2c2824, roughness: 0.96, metalness: 0 });
+    const ribMat = new THREE.MeshStandardMaterial({ color: 0x1a1c1e, roughness: 0.55, metalness: 0.35 });
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(size.x * 0.7, 0.01, size.z * 0.55), fibre);
+    pad.position.set(center.x, box.min.y - 0.006, center.z + size.z * 0.05);
+    pad.userData.part = "Kaput yalıtımı";
+    bonnet.add(pad);
+    for (const dx of [-0.28, 0.28]) {
+      const rib = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.012, size.z * 0.5), ribMat);
+      rib.position.set(center.x + dx, box.min.y - 0.012, center.z);
+      bonnet.add(rib);
+    }
+    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.42, 8), ribMat);
+    strut.position.set(center.x + size.x * 0.32, box.min.y - 0.16, center.z + size.z * 0.15);
+    strut.rotation.x = 0.7;
+    strut.userData.part = "Kaput amortisörü";
+    bonnet.add(strut);
+  }
 
   private dress(root: THREE.Object3D, car = false): void {
     root.traverse((obj) => {
