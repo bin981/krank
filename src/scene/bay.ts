@@ -11,6 +11,12 @@ export const BAY_NAME = "engine-bay";
 interface BayKit {
   battery: THREE.Object3D;
   alternator: THREE.Object3D;
+  transaxle: THREE.Object3D;
+  coolant: THREE.Object3D;
+  washer: THREE.Object3D;
+  master: THREE.Object3D;
+  boot: THREE.Object3D;
+  fuse: THREE.Object3D;
 }
 
 let kitPromise: Promise<BayKit> | null = null;
@@ -32,6 +38,7 @@ export function mountProceduralBay(bay: THREE.Object3D, loader: GLTFLoader): THR
     if (!root.parent) return;
     placeBattery(root, kit.battery);
     placeAlternator(root, kit.alternator);
+    placeRealParts(root, kit);
   }).catch((err) => {
     console.warn("Motor yuvası parçaları atlandı.", err);
   });
@@ -44,7 +51,6 @@ function buildShell(root: THREE.Group): void {
   const rubber = new THREE.MeshStandardMaterial({ color: 0x161616, roughness: 0.92, metalness: 0 });
   const satin = satinSteel(0x1c1e22);
   const bodyPaint = satinSteel(0x1a4f86);
-  const alu = new THREE.MeshStandardMaterial({ color: 0xb7bcc0, roughness: 0.42, metalness: 0.72 });
   const add = (mesh: THREE.Mesh, part?: string) => {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -64,14 +70,8 @@ function buildShell(root: THREE.Group): void {
     const side = strutSide(x, bodyPaint, steel, rubber);
     root.add(side);
   }
-  buildRadiator(add, alu, plastic, rubber, steel);
+  buildRadiator(add, plastic, rubber, steel);
   buildAirbox(add, plastic, rubber);
-  buildBottle(add, -0.4, -0.08, 0.24, 0x2f6fbe, 0xd7e4ee, "Cam suyu");
-  buildBottle(add, 0.42, -0.02, 0.28, 0xe2b000, 0xdfe8c8, "Genleşme kabı");
-
-  const master = add(new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.14, 12), steel), "Fren ana merkezi");
-  master.rotation.x = Math.PI / 2;
-  master.position.set(-0.08, 0.12, -0.3);
 
   const ao = document.createElement("canvas");
   ao.width = ao.height = 128;
@@ -167,29 +167,41 @@ function buildFirewall(
 
 function buildRadiator(
   add: (mesh: THREE.Mesh, part?: string) => THREE.Mesh,
-  alu: THREE.Material,
   plastic: THREE.Material,
   rubber: THREE.Material,
   steel: THREE.Material,
 ): void {
-  const core = add(new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.32, 0.028), alu), "Radyatör");
+  const finMat = new THREE.MeshStandardMaterial({
+    color: 0xc5cacd,
+    roughness: 0.38,
+    metalness: 0.82,
+    normalMap: finNormal(),
+    normalScale: new THREE.Vector2(0.6, 0.6),
+  });
+  const core = add(new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.32, 0.022), finMat), "Radyatör");
   core.position.set(0, 0.02, 0.44);
-  const finMat = new THREE.MeshStandardMaterial({ color: 0x9aa2a6, roughness: 0.35, metalness: 0.85 });
-  for (let i = 0; i < 18; i++) {
-    const fin = add(new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.003, 0.034), finMat));
-    fin.position.set(0, -0.125 + i * 0.016, 0.44);
-  }
   for (const side of [-1, 1]) {
-    const tank = add(new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.34, 12), plastic));
-    tank.position.set(side * 0.31, 0.02, 0.44);
+    const tank = add(new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.34, 14), plastic));
+    tank.position.set(side * 0.3, 0.02, 0.44);
+    const bulge = add(new THREE.Mesh(new THREE.SphereGeometry(0.034, 12, 8), plastic));
+    bulge.scale.y = 1.6;
+    bulge.position.set(side * 0.3, 0.02, 0.44);
   }
   const neck = add(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.014, 0.04, 8), plastic));
-  neck.position.set(0.31, 0.2, 0.44);
+  neck.position.set(0.3, 0.2, 0.44);
   const cap = add(new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.012, 8), steel));
-  cap.position.set(0.31, 0.226, 0.44);
-  const fan = add(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.018, 16), plastic));
+  cap.position.set(0.3, 0.226, 0.44);
+  const shroud = add(new THREE.Mesh(new THREE.RingGeometry(0.15, 0.185, 28), plastic), "Fan muhafazası");
+  shroud.position.set(0, 0.02, 0.4);
+  const fan = add(new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.02, 20), plastic), "Fan");
   fan.rotation.x = Math.PI / 2;
-  fan.position.set(0.0, 0.02, 0.4);
+  fan.position.set(0, 0.02, 0.388);
+  for (let b = 0; b < 6; b++) {
+    const blade = add(new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.02, 0.004), plastic));
+    const a = (b / 6) * Math.PI * 2;
+    blade.position.set(Math.cos(a) * 0.06, 0.02 + Math.sin(a) * 0.06, 0.388);
+    blade.rotation.z = a;
+  }
   hoseCurve(add, rubber, steel, new THREE.Vector3(-0.12, 0.16, 0.22), new THREE.Vector3(-0.05, 0.2, 0.36), new THREE.Vector3(0.12, 0.16, 0.44), "Üst hortum");
   hoseCurve(add, rubber, steel, new THREE.Vector3(-0.1, -0.08, 0.2), new THREE.Vector3(-0.02, -0.1, 0.34), new THREE.Vector3(0.1, -0.08, 0.44), "Alt hortum");
 }
@@ -243,58 +255,139 @@ function buildAirbox(
   }
 }
 
-function buildBottle(
-  add: (mesh: THREE.Mesh, part?: string) => THREE.Mesh,
-  x: number,
-  y: number,
-  z: number,
-  capColor: number,
-  fluidColor: number,
-  part: string,
-): void {
-  const shellMat = new THREE.MeshStandardMaterial({
-    color: 0xf4f1ea,
-    roughness: 0.28,
-    metalness: 0.02,
-    transparent: true,
-    opacity: 0.42,
-    depthWrite: false,
-  });
-  const shell = add(new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.048, 0.15, 16), shellMat), part);
-  shell.position.set(x, y, z);
-  const fluid = add(new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.04, 0.08, 14), new THREE.MeshStandardMaterial({ color: fluidColor, roughness: 0.2, transparent: true, opacity: 0.85 })));
-  fluid.position.set(x, y - 0.02, z);
-  const label = bottleLabel();
-  const tag = add(new THREE.Mesh(new THREE.PlaneGeometry(0.04, 0.05), new THREE.MeshStandardMaterial({ map: label, transparent: true, roughness: 0.5 })));
-  tag.position.set(x + 0.048, y, z);
-  const cap = add(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.022, 0.016, 10), new THREE.MeshStandardMaterial({ color: capColor, roughness: 0.4 })));
-  cap.position.set(x, y + 0.082, z);
-}
-
-function bottleLabel(): THREE.CanvasTexture {
+function finNormal(): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
-  canvas.width = 64;
-  canvas.height = 96;
+  canvas.width = 4;
+  canvas.height = 64;
   const g = canvas.getContext("2d");
   if (g) {
-    g.fillStyle = "rgba(255,255,255,0.15)";
-    g.fillRect(0, 0, 64, 96);
-    g.strokeStyle = "#222";
-    g.lineWidth = 2;
-    g.beginPath();
-    g.moveTo(8, 28);
-    g.lineTo(56, 28);
-    g.moveTo(8, 62);
-    g.lineTo(56, 62);
-    g.stroke();
-    g.fillStyle = "#222";
-    g.font = "12px sans-serif";
-    g.fillText("MAX", 16, 24);
-    g.fillText("MIN", 18, 78);
+    const img = g.createImageData(4, 64);
+    for (let y = 0; y < 64; y++) {
+      const ny = Math.sin((y % 4) / 4 * Math.PI) * 0.55;
+      const nz = Math.sqrt(Math.max(0.05, 1 - ny * ny));
+      const r = 128;
+      const gg = Math.round((ny * 0.5 + 0.5) * 255);
+      const b = Math.round((nz * 0.5 + 0.5) * 255);
+      for (let x = 0; x < 4; x++) {
+        const i = (y * 4 + x) * 4;
+        img.data[i] = r;
+        img.data[i + 1] = gg;
+        img.data[i + 2] = b;
+        img.data[i + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
   }
   const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(1, 28);
+  tex.colorSpace = THREE.NoColorSpace;
   return tex;
+}
+
+function placeRealParts(root: THREE.Object3D, kit: BayKit): void {
+  const steel = new THREE.MeshStandardMaterial({ color: 0x1a1c1e, roughness: 0.55, metalness: 0.35 });
+  const rubber = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.9, metalness: 0 });
+
+  const box = prep(kit.transaxle);
+  box.scale.setScalar(0.7);
+  box.rotation.y = Math.PI;
+  box.position.set(0.49, -0.16, 0.04);
+  box.userData.part = "Şanzıman";
+  root.add(box);
+
+  const coolant = prep(kit.coolant);
+  coolant.position.set(0.34, 0.0, 0.3);
+  coolant.userData.part = "Genleşme kabı";
+  root.add(coolant);
+  const feed = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.16, 8), rubber);
+  feed.rotation.z = Math.PI / 2;
+  feed.position.set(0.24, 0.1, 0.36);
+  feed.userData.part = "Üst hortum";
+  feed.castShadow = true;
+  root.add(feed);
+
+  const washer = prep(kit.washer);
+  shortenWasherNeck(washer);
+  washer.position.set(-0.34, -0.2, 0.26);
+  washer.rotation.y = 0.4;
+  washer.userData.part = "Cam suyu";
+  root.add(washer);
+
+  const master = prep(kit.master);
+  master.rotation.y = -Math.PI / 2;
+  master.position.set(-0.16, 0.02, -0.28);
+  master.userData.part = "Fren ana merkezi";
+  root.add(master);
+  const booster = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.115, 0.07, 24), steel);
+  booster.rotation.x = Math.PI / 2;
+  booster.position.set(-0.16, 0.08, -0.36);
+  booster.userData.part = "Fren servosu";
+  booster.castShadow = true;
+  root.add(booster);
+  for (const x of [-0.19, -0.13]) {
+    const line = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.22, 6), steel);
+    line.position.set(x, -0.08, -0.3);
+    line.userData.part = "Fren hattı";
+    root.add(line);
+  }
+
+  const boot = prep(kit.boot);
+  boot.rotation.y = Math.PI / 2;
+  boot.position.set(-0.26, 0.1, 0.02);
+  boot.userData.part = "Emme hortumu";
+  root.add(boot);
+
+  const fuse = prep(kit.fuse);
+  fuse.position.set(-0.22, -0.16, -0.16);
+  fuse.rotation.y = 0.3;
+  fuse.userData.part = "Sigorta kutusu";
+  const lid = new THREE.Mesh(
+    new THREE.BoxGeometry(0.37, 0.012, 0.17),
+    new THREE.MeshStandardMaterial({ color: 0x121416, roughness: 0.55, metalness: 0.08 }),
+  );
+  lid.position.y = 0.08;
+  lid.name = "fuse-lid";
+  lid.userData.part = "Sigorta kapağı";
+  lid.castShadow = true;
+  fuse.add(lid);
+  root.add(fuse);
+}
+
+function prep(source: THREE.Object3D): THREE.Object3D {
+  const obj = source.clone(true);
+  obj.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+  });
+  return obj;
+}
+
+/** The washer's filler is a 0.37 m pipe along +X. Keep a short neck and the cap on the tank. */
+function shortenWasherNeck(root: THREE.Object3D): void {
+  root.updateWorldMatrix(true, true);
+  root.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh || mesh.name !== "reservoir") return;
+    const src = mesh.geometry.getAttribute("position");
+    const v = new THREE.Vector3();
+    const inv = mesh.matrixWorld.clone().invert();
+    const arr = new Float32Array(src.count * 3);
+    for (let i = 0; i < src.count; i++) {
+      v.fromBufferAttribute(src, i).applyMatrix4(mesh.matrixWorld);
+      if (v.x > 0.06) v.x = 0.06;
+      v.applyMatrix4(inv);
+      arr[i * 3] = v.x;
+      arr[i * 3 + 1] = v.y;
+      arr[i * 3 + 2] = v.z;
+    }
+    const geo = mesh.geometry.clone();
+    geo.setAttribute("position", new THREE.BufferAttribute(arr, 3));
+    geo.computeVertexNormals();
+    mesh.geometry = geo;
+  });
 }
 
 function satinSteel(hex: number): THREE.MeshStandardMaterial {
@@ -369,9 +462,25 @@ async function buildKit(loader: GLTFLoader): Promise<BayKit> {
   await MeshoptDecoder.ready;
   loader.setMeshoptDecoder(MeshoptDecoder);
   const base = import.meta.env.BASE_URL;
-  const [battery, alternator] = await Promise.all([
-    loader.loadAsync(`${base}models/bay/car_battery_cc-by.glb`),
-    loader.loadAsync(`${base}models/bay/alternator_toyota_cc-by-sa.glb`),
+  const load = (file: string) => loader.loadAsync(`${base}models/bay/${file}`);
+  const [battery, alternator, transaxle, coolant, washer, master, boot, fuse] = await Promise.all([
+    load("car_battery_cc-by.glb"),
+    load("alternator_toyota_cc-by-sa.glb"),
+    load("transaxle_quaife_qtek5.glb"),
+    load("coolant_expansion_tank.glb"),
+    load("washer_fluid_reservoir.glb"),
+    load("brake_master_cylinder.glb"),
+    load("intake_boot_vw.glb"),
+    load("fuse_relay_panel.glb"),
   ]);
-  return { battery: battery.scene, alternator: alternator.scene };
+  return {
+    battery: battery.scene,
+    alternator: alternator.scene,
+    transaxle: transaxle.scene,
+    coolant: coolant.scene,
+    washer: washer.scene,
+    master: master.scene,
+    boot: boot.scene,
+    fuse: fuse.scene,
+  };
 }

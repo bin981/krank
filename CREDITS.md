@@ -2,7 +2,8 @@
 
 Bu sayfa `CREDITS.md` dosyasından üretilir. Aşağıdaki liste arşivdeki kaynakların tamamıdır.
 Yayındaki dosyalar: `family-sedan.glb`, atölye GLB'leri (bina, lift, takım dolabı, hurda tezgâh, vinç),
-el aletleri (cırcır, kombine anahtar, multimetre, çanta, yağdanlık), Honda K24Z3 motor taraması, akü, Toyota alternatörü, Poly Haven `auto_service` 1k/2k,
+el aletleri (cırcır, kombine anahtar, multimetre, çanta, yağdanlık), Honda K24Z3 motor taraması, akü, Toyota alternatörü,
+şanzıman, genleşme kabı, cam suyu deposu, fren ana merkezi, emme körüğü, sigorta paneli, Poly Haven `auto_service` 1k/2k,
 ambientCG / Poly Haven 1k PBR dokular ve `sounds/` altındaki döngüler ile seçilmiş marş kayıtları.
 CC BY-SA marş kayıtları (`saab_900_16v_turbo_cold_start`) değiştirilmeden durur.
 Döngülerin uç örnek adımı dosyanın kendi dalga şekliyle aynı mertebededir; ek kesme yapılmadı.
@@ -10,7 +11,7 @@ Döngülerin uç örnek adımı dosyanın kendi dalga şekliyle aynı mertebeded
 
 Every file in this folder may be redistributed in a public GitHub repo. Licenses are CC0 1.0, CC BY 3.0/4.0 or CC BY-SA 3.0/4.0. There is no NonCommercial or editorial-only content.
 CC BY / BY-SA items **must be credited** in the app's About page and in the repo. The text below is enough for that.
-CC BY-SA items (marked **SA**) must stay under BY-SA if you modify and redistribute them. That covers the K24Z3 scan, the Toyota alternator, and the marked audio files, not the KRANK code.
+CC BY-SA items (marked **SA**) must stay under BY-SA if you modify and redistribute them. That covers the K24Z3 scan, the Toyota alternator, the coolant tank, and the marked audio files, not the KRANK code.
 
 ## 3D models
 
@@ -33,6 +34,12 @@ CC BY-SA items (marked **SA**) must stay under BY-SA if you modify and redistrib
 | models/engines/honda_k24z3_scan_280k_clean.glb and honda_k24z3_scan_120k_clean.glb | https://www.printables.com/model/1339398 | Davidss (Printables) | CC BY-SA 4.0 **SA** (https://creativecommons.org/licenses/by-sa/4.0/). Modified: 3MF to GLB, holes closed, shreds removed, decimated to 280k/120k, per-vertex AO in COLOR_0, metres, meshopt. This derivative stays CC BY-SA 4.0. |
 | models/bay/car_battery_cc-by.glb | https://www.printables.com/model/640072 | Guilherme Joenck (Printables) | CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Modified: STL to GLB, millimetres to metres, base at y=0, case and terminal materials, meshopt. |
 | models/bay/alternator_toyota_cc-by-sa.glb | https://www.printables.com/model/1893952 | uz_ketle (Printables) | CC BY-SA 4.0 **SA** (https://creativecommons.org/licenses/by-sa/4.0/). Modified: decimated from 4.26M to 80k triangles, centimetres to metres, Y-up, base at y=0, aluminium material, meshopt. This derivative stays CC BY-SA 4.0. |
+| models/bay/coolant_expansion_tank.glb | https://www.thingiverse.com/thing:196634 (mirror https://archive.org/details/thingiverse-196634) | Kjenk91 | CC BY-SA 3.0 **SA** (https://creativecommons.org/licenses/by-sa/3.0/). Modified: STL to GLB, metres, Y-up, base at y=0, translucent tank plus pink coolant mesh, webp, meshopt. This derivative stays CC BY-SA 3.0. |
+| models/bay/washer_fluid_reservoir.glb | https://www.thingiverse.com/thing:4337371 | Tamas Szivos (rcklub) | CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Modified: STL to GLB, metres, Y-up, translucent tank plus blue fluid, webp, meshopt. |
+| models/bay/transaxle_quaife_qtek5.glb | https://www.thingiverse.com/thing:5827888 | Jon P (jpl3k) | CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Modified: STL to GLB, metres, Y-up, cast-aluminium material, webp, meshopt. |
+| models/bay/brake_master_cylinder.glb | https://www.thingiverse.com/thing:4963970 | Miguel Hidalgo (DevilDogDotGames) | CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Modified: STL to GLB, metres, Y-up, webp, meshopt. |
+| models/bay/intake_boot_vw.glb | https://www.thingiverse.com/thing:3047110 | A P (bonde456) | CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Modified: STL to GLB, metres, Y-up, rubber material, webp, meshopt. |
+| models/bay/fuse_relay_panel.glb | https://www.thingiverse.com/thing:3813372 | Mike Zegwaard (Brand_799) | CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Modified: STL to GLB, metres, Y-up, webp, meshopt. The Volvo intake manifold and Subaru throttle body from the same set are not used on the K24 scan. |
 
 ## Textures and HDRIs
 

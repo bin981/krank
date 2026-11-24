@@ -86,29 +86,6 @@ function dressWeakSpots(mesh: THREE.Mesh): void {
   bolt.position.set(-0.1, -0.58, -0.725);
   buildAccessoryDrive(add, rubber, steel, alu);
 
-  // Flywheel end is the filled +Z face. Cast bellhousing with ribs and bolt bosses.
-  const bell = add(new THREE.CylinderGeometry(0.48, 0.36, 0.16, 28), alu);
-  bell.rotation.x = Math.PI / 2;
-  bell.position.set(0.02, -0.12, 0.94);
-  const casing = add(new THREE.CylinderGeometry(0.34, 0.4, 0.3, 24), alu);
-  casing.rotation.x = Math.PI / 2;
-  casing.position.set(0.02, -0.16, 1.14);
-  const sump = add(new THREE.BoxGeometry(0.46, 0.12, 0.26), iron);
-  sump.position.set(0.02, -0.48, 1.12);
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    const stud = add(new THREE.CylinderGeometry(0.026, 0.03, 0.035, 6), steel);
-    stud.rotation.x = Math.PI / 2;
-    stud.position.set(0.02 + Math.cos(a) * 0.4, -0.12 + Math.sin(a) * 0.4, 0.87);
-  }
-  for (let i = 0; i < 4; i++) {
-    const rib = add(new THREE.BoxGeometry(0.62, 0.028, 0.16), alu);
-    rib.position.set(0.02, -0.32 + i * 0.12, 1.16);
-  }
-  const starterBoss = add(new THREE.CylinderGeometry(0.07, 0.08, 0.1, 12), alu);
-  starterBoss.rotation.z = Math.PI / 2;
-  starterBoss.position.set(0.28, -0.28, 1.02);
-
   // Exhaust side is -X, which faces the radiator. Keep the pipes against the head
   // and show a shield, so the filled face is covered without pipes floating on the core.
   for (let i = 0; i < 4; i++) {
